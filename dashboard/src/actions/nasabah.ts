@@ -87,7 +87,7 @@ export async function createNasabah(input: NasabahInput) {
     return { error: parsed.error.flatten().fieldErrors }
   }
 
-  const { tanggalLahir, ...rest } = parsed.data
+  const { tanggalLahir, kelompokId, kolektorId, dokumenUrls, ...rest } = parsed.data
   const nomorAnggota = await generateNomorAnggota()
 
   const nasabah = await prisma.nasabah.create({
@@ -95,6 +95,9 @@ export async function createNasabah(input: NasabahInput) {
       ...rest,
       nomorAnggota,
       tanggalLahir: tanggalLahir ? new Date(tanggalLahir) : undefined,
+      kelompokId: kelompokId || null,
+      kolektorId: kolektorId || null,
+      dokumenUrls: dokumenUrls ?? [],
       tanggalGabung: new Date(),
     },
   })
@@ -107,13 +110,17 @@ export async function updateNasabah(id: string, input: Partial<NasabahInput>) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
 
-  const { tanggalLahir, ...rest } = input
+  const { tanggalLahir, dokumenUrls, ...rest } = input
+  const normalized = { ...rest } as Record<string, unknown>
+  if ("kelompokId" in normalized && !normalized.kelompokId) normalized.kelompokId = null
+  if ("kolektorId" in normalized && !normalized.kolektorId) normalized.kolektorId = null
 
   await prisma.nasabah.update({
     where: { id },
     data: {
-      ...rest,
+      ...normalized,
       tanggalLahir: tanggalLahir ? new Date(tanggalLahir) : undefined,
+      ...(dokumenUrls ? { dokumenUrls } : {}),
     },
   })
 

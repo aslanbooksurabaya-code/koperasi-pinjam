@@ -258,6 +258,21 @@ UAT minimum:
 - **Perhitungan keuangan tidak konsisten lintas modul**
   - Mitigasi: sentralisasi fungsi hitung di `src/lib`.
 - **Scope creep**
+
+---
+
+## 9) Progress Update (2026-04-19)
+
+- [x] Perbaikan relasi `nasabah -> kelompok` di form create nasabah (dropdown kelompok + kolektor saat input awal).
+- [x] Penambahan input dokumen pendukung pelanggan baru (`dokumenUrls`) pada create nasabah.
+- [x] Tenor pinjaman dual type: `BULANAN` dan `MINGGUAN` (schema + form + pencairan jadwal).
+- [x] Upload bukti bayar pelanggan (`buktiBayarUrl`) pada proses pembayaran.
+- [x] Laporan history pembayaran customer + indikator ranking (`A/B/C/D`) + status lunas/kurang/telat.
+- [x] Form kelompok: pilih anggota kelompok + pilih ketua dari anggota.
+- [x] Modul daftar kolektor baru: sumber dari nasabah, ketua kelompok, atau input manual; dukung role kolektor+admin.
+- [x] Tabel user-role manajemen ditampilkan di modul kolektor.
+- [x] Modul akuntansi sederhana (pemasukan/pengeluaran) di halaman kas menggunakan data transaksi riil.
+- [x] Laporan laba-rugi diperbarui dari transaksi kas nyata (bukan placeholder statis).
   - Mitigasi: implementasi wajib hanya Gelombang A dahulu.
 
 ---
@@ -269,4 +284,3 @@ Urutan aman implementasi:
 2. Task 3 -> 4 -> 5 (core operasional)
 3. Task 6 -> 7 -> 8 (dokumen + finance + notifikasi)
 4. Task 9 (stabilisasi & dokumentasi)
-

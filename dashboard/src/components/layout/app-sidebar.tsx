@@ -27,6 +27,7 @@ const navigation = [
     items: [
       { title: "Nasabah", url: "/nasabah", icon: Users },
       { title: "Kelompok", url: "/kelompok", icon: Users },
+      { title: "Kolektor", url: "/kolektor", icon: Users },
     ],
   },
   {
@@ -49,6 +50,8 @@ const navigation = [
     label: "Laporan",
     items: [
       { title: "Per Kelompok", url: "/laporan/per-kelompok", icon: FileBarChart },
+      { title: "History Pembayaran", url: "/laporan/history-pembayaran", icon: FileBarChart },
+      { title: "Transaksi Per User", url: "/laporan/transaksi-per-user", icon: FileBarChart },
       { title: "Arus Kas", url: "/laporan/arus-kas", icon: FileBarChart },
       { title: "Laba Rugi", url: "/laporan/laba-rugi", icon: TrendingDown },
     ],

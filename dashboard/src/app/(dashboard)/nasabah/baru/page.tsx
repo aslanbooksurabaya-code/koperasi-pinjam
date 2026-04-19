@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { nasabahSchema, type NasabahInput } from "@/lib/validations/nasabah"
-import { createNasabah } from "@/actions/nasabah"
+import { createNasabah, getKelompokList, getKolektorList } from "@/actions/nasabah"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,11 +16,23 @@ import { toast } from "sonner"
 import { ArrowLeft, ArrowRight, Save, User, MapPin } from "lucide-react"
 import Link from "next/link"
 
-const STEPS = ["Data Diri", "Data Kontak & Usaha"]
+const STEPS = ["Data Diri", "Data Kontak & Usaha", "Penugasan & Dokumen"]
+
+type Option = { id: string; nama: string }
+type KolektorOption = { id: string; name: string }
+
+function parseDokumen(raw: string): string[] {
+  return raw
+    .split(/\n|,/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
 
 export default function NasabahBaruPage() {
   const [step, setStep] = useState(0)
   const [isPending, startTransition] = useTransition()
+  const [kelompokList, setKelompokList] = useState<Option[]>([])
+  const [kolektorList, setKolektorList] = useState<KolektorOption[]>([])
   const router = useRouter()
 
   const {
@@ -31,13 +43,35 @@ export default function NasabahBaruPage() {
     formState: { errors },
   } = useForm<NasabahInput>({
     resolver: zodResolver(nasabahSchema) as never,
-    defaultValues: { status: "AKTIF" },
+    defaultValues: { status: "AKTIF", dokumenUrls: [] },
   })
 
+  useEffect(() => {
+    let cancelled = false
+
+    Promise.all([getKelompokList(), getKolektorList()])
+      .then(([kelompok, kolektor]) => {
+        if (cancelled) return
+        setKelompokList(kelompok.map((k) => ({ id: k.id, nama: k.nama })))
+        setKolektorList(kolektor)
+      })
+      .catch(() => {
+        toast.error("Gagal memuat daftar kelompok/kolektor.")
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleNext = async () => {
-    const fields: (keyof NasabahInput)[] = step === 0
-      ? ["namaLengkap", "nik", "alamat"]
-      : ["noHp"]
+    const fields: (keyof NasabahInput)[] =
+      step === 0
+        ? ["namaLengkap", "nik", "alamat"]
+        : step === 1
+          ? ["noHp"]
+          : ["status"]
+
     const valid = await trigger(fields)
     if (valid) setStep((s) => s + 1)
   }
@@ -49,7 +83,7 @@ export default function NasabahBaruPage() {
         toast.error("Gagal menyimpan data nasabah. Periksa kembali form.")
         return
       }
-      toast.success(`Nasabah berhasil ditambahkan!`)
+      toast.success("Nasabah berhasil ditambahkan!")
       router.push("/nasabah")
     })
   }
@@ -66,7 +100,6 @@ export default function NasabahBaruPage() {
         </div>
       </div>
 
-      {/* Step indicator */}
       <div className="flex gap-2">
         {STEPS.map((s, i) => (
           <div key={s} className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-emerald-500" : "bg-muted"}`} />
@@ -148,8 +181,59 @@ export default function NasabahBaruPage() {
                   <SelectContent>
                     <SelectItem value="AKTIF">Aktif</SelectItem>
                     <SelectItem value="NON_AKTIF">Non Aktif</SelectItem>
+                    <SelectItem value="KELUAR">Keluar</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 2 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Relasi & Dokumen Pendukung</CardTitle>
+              <CardDescription>Pilih kelompok dan kolektor saat pembuatan nasabah</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Kelompok</Label>
+                  <Select onValueChange={(v) => setValue("kelompokId", !v || v === "__NONE__" ? undefined : v)} defaultValue="__NONE__">
+                    <SelectTrigger><SelectValue placeholder="Pilih kelompok" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__NONE__">Belum ditentukan</SelectItem>
+                      {kelompokList.map((k) => (
+                        <SelectItem key={k.id} value={k.id}>{k.nama}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Kolektor</Label>
+                  <Select onValueChange={(v) => setValue("kolektorId", !v || v === "__NONE__" ? undefined : v)} defaultValue="__NONE__">
+                    <SelectTrigger><SelectValue placeholder="Pilih kolektor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__NONE__">Belum ditentukan</SelectItem>
+                      {kolektorList.map((k) => (
+                        <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dokumenPendukung">Dokumen Pendukung Pelanggan Baru</Label>
+                <Textarea
+                  id="dokumenPendukung"
+                  placeholder="Masukkan URL dokumen (1 baris 1 URL):\nhttps://.../ktp.jpg\nhttps://.../kk.jpg"
+                  rows={5}
+                  onChange={(e) => setValue("dokumenUrls", parseDokumen(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">Bisa untuk KTP, KK, foto rumah, surat usaha, bukti lain.</p>
+                {errors.dokumenUrls && <p className="text-xs text-red-500">Dokumen pendukung tidak valid.</p>}
               </div>
             </CardContent>
           </Card>

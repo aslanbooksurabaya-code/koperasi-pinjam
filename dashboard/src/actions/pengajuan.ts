@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { pengajuanSchema, approvalSchema, pencairanSchema } from "@/lib/validations/pengajuan"
-import { addMonths } from "date-fns"
+import { addMonths, addWeeks } from "date-fns"
 import { ApprovalStatus, Prisma, RoleType } from "@prisma/client"
 import { requireRoles } from "@/lib/roles"
 import { writeApprovalLog, writeAuditLog } from "@/lib/audit"
@@ -65,6 +65,24 @@ export async function getPengajuanById(id: string) {
   })
 }
 
+export async function getNasabahPengajuanOptions() {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  return prisma.nasabah.findMany({
+    where: { status: "AKTIF" },
+    select: {
+      id: true,
+      nomorAnggota: true,
+      namaLengkap: true,
+      kelompokId: true,
+      kelompok: { select: { nama: true } },
+      kolektor: { select: { name: true } },
+    },
+    orderBy: { namaLengkap: "asc" },
+  })
+}
+
 export async function createPengajuan(input: unknown) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
@@ -75,9 +93,18 @@ export async function createPengajuan(input: unknown) {
 
   const { bungaPerBulan, plafonDiajukan, ...rest } = parsed.data
 
+  const nasabah = await prisma.nasabah.findUnique({
+    where: { id: parsed.data.nasabahId },
+    select: { id: true, kelompokId: true },
+  })
+  if (!nasabah) {
+    return { error: { nasabahId: ["Nasabah tidak ditemukan."] } }
+  }
+
   const pengajuan = await prisma.pengajuan.create({
     data: {
       ...rest,
+      kelompokId: rest.kelompokId || nasabah.kelompokId || null,
       plafonDiajukan: new Prisma.Decimal(plafonDiajukan),
       bungaPerBulan: new Prisma.Decimal(bungaPerBulan / 100),
       status: "DIAJUKAN",
@@ -170,6 +197,7 @@ export async function cairkanPinjaman(input: unknown) {
   const plafon = Number(pengajuan.plafonDisetujui ?? pengajuan.plafonDiajukan)
   const bunga = Number(pengajuan.bungaPerBulan)
   const tenor = pengajuan.tenor
+  const tenorType = pengajuan.tenorType
 
   const angsuranPokok = plafon / tenor
   const angsuranBunga = plafon * bunga
@@ -177,7 +205,7 @@ export async function cairkanPinjaman(input: unknown) {
   const nilaiCair = plafon - potonganAdmin - potonganProvisi
 
   const tglCair = new Date(tanggalCair)
-  const tglJatuhTempo = addMonths(tglCair, tenor)
+  const tglJatuhTempo = tenorType === "MINGGUAN" ? addWeeks(tglCair, tenor) : addMonths(tglCair, tenor)
   const nomorKontrak = `KNT-${Date.now().toString(36).toUpperCase()}`
 
   // Buat pinjaman + jadwal angsuran dalam 1 transaksi
@@ -187,6 +215,7 @@ export async function cairkanPinjaman(input: unknown) {
         nomorKontrak,
         pengajuanId,
         pokokPinjaman: new Prisma.Decimal(plafon),
+        tenorType,
         tenor,
         bungaPerBulan: new Prisma.Decimal(bunga),
         angsuranPokok: new Prisma.Decimal(angsuranPokok),
@@ -203,14 +232,17 @@ export async function cairkanPinjaman(input: unknown) {
     })
 
     // Generate jadwal angsuran
-    const jadwals = Array.from({ length: tenor }, (_, i) => ({
-      pinjamanId: pin.id,
-      angsuranKe: i + 1,
-      tanggalJatuhTempo: addMonths(tglCair, i + 1),
-      pokok: new Prisma.Decimal(angsuranPokok),
-      bunga: new Prisma.Decimal(angsuranBunga),
-      total: new Prisma.Decimal(totalAngsuran),
-    }))
+    const jadwals = Array.from({ length: tenor }, (_, i) => {
+      const tanggalJatuhTempo = tenorType === "MINGGUAN" ? addWeeks(tglCair, i + 1) : addMonths(tglCair, i + 1)
+      return {
+        pinjamanId: pin.id,
+        angsuranKe: i + 1,
+        tanggalJatuhTempo,
+        pokok: new Prisma.Decimal(angsuranPokok),
+        bunga: new Prisma.Decimal(angsuranBunga),
+        total: new Prisma.Decimal(totalAngsuran),
+      }
+    })
 
     await tx.jadwalAngsuran.createMany({ data: jadwals })
 

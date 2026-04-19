@@ -14,6 +14,7 @@ export const nasabahSchema = z.object({
   namaUsaha: z.string().optional(),
   kelompokId: z.string().optional(),
   kolektorId: z.string().optional(),
+  dokumenUrls: z.array(z.string().min(3)).optional(),
   status: z.enum(["AKTIF", "NON_AKTIF", "KELUAR"]).default("AKTIF"),
 })
 

@@ -142,6 +142,11 @@ enum JenisPinjaman {
   USAHA
 }
 
+enum TenorType {
+  BULANAN
+  MINGGUAN
+}
+
 enum StatusPengajuan {
   DRAFT
   DIAJUKAN
@@ -160,6 +165,7 @@ model Pengajuan {
   kelompokId      String?
   kelompok        Kelompok?       @relation(fields: [kelompokId], references: [id])
   jenisPinjaman   JenisPinjaman   @default(REGULAR)
+  tenorType       TenorType       @default(BULANAN)
   plafonDiajukan  Decimal         @db.Decimal(15, 2)
   plafonDisetujui Decimal?        @db.Decimal(15, 2)
   tenor           Int
@@ -200,6 +206,7 @@ model Pinjaman {
   pengajuanId     String         @unique
   pengajuan       Pengajuan      @relation(fields: [pengajuanId], references: [id])
   pokokPinjaman   Decimal        @db.Decimal(15, 2)
+  tenorType       TenorType      @default(BULANAN)
   tenor           Int
   bungaPerBulan   Decimal        @db.Decimal(5, 4)
   angsuranPokok   Decimal        @db.Decimal(15, 2)
@@ -258,6 +265,7 @@ model Pembayaran {
   denda          Decimal     @db.Decimal(15, 2) @default(0)
   totalBayar     Decimal     @db.Decimal(15, 2)
   metode         MetodeBayar @default(TUNAI)
+  buktiBayarUrl  String?
   catatan        String?
   inputOlehId    String
   inputOleh      User        @relation(fields: [inputOlehId], references: [id])

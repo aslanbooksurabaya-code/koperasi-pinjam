@@ -17,6 +17,14 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
 
   const runPayment = (mode: "FULL" | "PARSIAL" | "PELUNASAN") => {
     let jumlahBayar: number | undefined
+    const metode = (prompt("Metode bayar: TUNAI / TRANSFER", "TUNAI") ?? "TUNAI").toUpperCase() as "TUNAI" | "TRANSFER"
+    if (metode !== "TUNAI" && metode !== "TRANSFER") {
+      toast.error("Metode bayar hanya boleh TUNAI atau TRANSFER.")
+      return
+    }
+
+    const buktiBayarUrl = prompt("URL bukti bayar (opsional, kosongkan jika tidak ada)", "") ?? ""
+
     if (mode === "PARSIAL") {
       const raw = prompt(`Masukkan jumlah bayar parsial (maks ${fmt(total)})`, Math.floor(total / 2).toString())
       if (!raw) return
@@ -35,7 +43,8 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
         jadwalAngsuranId: jadwalId,
         mode,
         jumlahBayar,
-        metode: "TUNAI",
+        metode,
+        buktiBayarUrl: buktiBayarUrl.trim() || undefined,
       })
       if (!("success" in result) || !result.success) {
         toast.error("error" in result ? result.error : "Gagal memproses pembayaran.")

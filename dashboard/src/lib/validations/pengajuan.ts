@@ -4,6 +4,7 @@ export const pengajuanSchema = z.object({
   nasabahId: z.string().min(1, "Pilih nasabah"),
   kelompokId: z.string().optional(),
   jenisPinjaman: z.enum(["REGULAR", "MIKRO", "USAHA"]).default("REGULAR"),
+  tenorType: z.enum(["BULANAN", "MINGGUAN"]).default("BULANAN"),
   plafonDiajukan: z.coerce.number().min(500000, "Minimal Rp 500.000").max(100000000, "Maksimal Rp 100 juta"),
   tenor: z.coerce.number().min(1).max(36),
   bungaPerBulan: z.coerce.number().min(0.1).max(5),

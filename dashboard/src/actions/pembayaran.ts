@@ -75,6 +75,7 @@ export async function inputPembayaran(input: {
   mode?: ModePembayaran
   jumlahBayar?: number
   metode: MetodePembayaran
+  buktiBayarUrl?: string
   catatan?: string
 }) {
   const session = await auth()
@@ -155,6 +156,7 @@ export async function inputPembayaran(input: {
         denda: new Prisma.Decimal(alokasiDenda),
         totalBayar: new Prisma.Decimal(jumlahBayar),
         metode: input.metode,
+        buktiBayarUrl: input.buktiBayarUrl,
         catatan: catatanFinal,
         inputOlehId: userId,
       },
@@ -238,6 +240,7 @@ export async function inputPembayaran(input: {
       denda: result.denda,
       mode: result.mode,
       metode: input.metode,
+      buktiBayarUrl: input.buktiBayarUrl ?? null,
       sisaTagihan: result.sisaTagihan,
     },
   })
@@ -279,6 +282,114 @@ export async function getRecentPembayaran(limit = 20) {
       },
       inputOleh: { select: { name: true } },
     },
+  })
+}
+
+export async function getHistoryPembayaranNasabahReport() {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  const today = new Date()
+
+  const nasabahList = await prisma.nasabah.findMany({
+    include: {
+      kelompok: { select: { nama: true } },
+      pengajuan: {
+        include: {
+          pinjaman: {
+            include: {
+              jadwalAngsuran: {
+                orderBy: { angsuranKe: "asc" },
+              },
+              pembayaran: {
+                where: { isBatalkan: false },
+                select: {
+                  catatan: true,
+                  totalBayar: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { namaLengkap: "asc" },
+  })
+
+  return nasabahList.map((nasabah) => {
+    let totalTagihan = 0
+    let totalDibayar = 0
+    let selesai = 0
+    let telat = 0
+    let belumJatuhTempo = 0
+    let belumBayar = 0
+    let lunas = false
+
+    const pinjamanAktif = nasabah.pengajuan
+      .map((p) => p.pinjaman)
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+
+    for (const pinjaman of pinjamanAktif) {
+      lunas = lunas || pinjaman.status === "LUNAS"
+      const pembayaranTagMap = new Map<string, number>()
+
+      for (const p of pinjaman.pembayaran) {
+        const tags = p.catatan?.match(/\[JADWAL:([^\]]+)\]/g) ?? []
+        for (const rawTag of tags) {
+          const jadwalId = rawTag.replace("[JADWAL:", "").replace("]", "")
+          const prev = pembayaranTagMap.get(jadwalId) ?? 0
+          pembayaranTagMap.set(jadwalId, prev + Number(p.totalBayar))
+        }
+      }
+
+      for (const jadwal of pinjaman.jadwalAngsuran) {
+        const nominalTagihan = Number(jadwal.total)
+        const bayarParsial = pembayaranTagMap.get(jadwal.id) ?? 0
+        const bayarEfektif = jadwal.sudahDibayar ? nominalTagihan : Math.min(nominalTagihan, bayarParsial)
+
+        totalTagihan += nominalTagihan
+        totalDibayar += bayarEfektif
+
+        if (jadwal.sudahDibayar || bayarEfektif >= nominalTagihan) {
+          selesai += 1
+          if (jadwal.tanggalBayar && jadwal.tanggalBayar > jadwal.tanggalJatuhTempo) {
+            telat += 1
+          }
+          continue
+        }
+
+        if (jadwal.tanggalJatuhTempo > today) {
+          belumJatuhTempo += 1
+        } else {
+          belumBayar += 1
+          telat += 1
+        }
+      }
+    }
+
+    const kurangAngsuran = Math.max(0, totalTagihan - totalDibayar)
+
+    const ranking =
+      telat === 0 && kurangAngsuran <= 0 ? "A" :
+      telat <= 1 && kurangAngsuran < 1_000_000 ? "B" :
+      telat <= 3 && kurangAngsuran < 3_000_000 ? "C" :
+      "D"
+
+    return {
+      nasabahId: nasabah.id,
+      nomorAnggota: nasabah.nomorAnggota,
+      namaLengkap: nasabah.namaLengkap,
+      kelompok: nasabah.kelompok?.nama ?? "-",
+      totalTagihan,
+      totalDibayar,
+      kurangAngsuran,
+      selesai,
+      telat,
+      belumJatuhTempo,
+      belumBayar,
+      lunas,
+      ranking,
+    }
   })
 }
 
