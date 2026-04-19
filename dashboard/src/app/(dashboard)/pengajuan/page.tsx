@@ -131,6 +131,11 @@ export default async function PengajuanListPage({
                               <Link href={`/pengajuan/${row.id}/approve`}>Setujui</Link>
                             </Button>
                           )}
+                          {row.status === "DICAIRKAN" && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                              <Link href={`/dokumen/pencairan/${row.id}`}>Cetak Bukti</Link>
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

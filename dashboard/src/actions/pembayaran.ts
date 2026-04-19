@@ -7,6 +7,8 @@ import { hitungDenda } from "@/lib/pembayaran"
 import { Prisma, RoleType, ApprovalEntityType, ApprovalStatus } from "@prisma/client"
 import { requireRoles } from "@/lib/roles"
 import { writeAuditLog } from "@/lib/audit"
+import { computeRanking } from "@/lib/ranking"
+import { getRankingConfig } from "@/actions/settings"
 
 type MetodePembayaran = "TUNAI" | "TRANSFER"
 type ModePembayaran = "FULL" | "PARSIAL" | "PELUNASAN"
@@ -77,6 +79,7 @@ export async function inputPembayaran(input: {
   metode: MetodePembayaran
   buktiBayarUrl?: string
   catatan?: string
+  tanggalBayar?: Date | string
 }) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
@@ -102,7 +105,7 @@ export async function inputPembayaran(input: {
   }
 
   const mode: ModePembayaran = input.mode ?? "FULL"
-  const tanggalBayar = new Date()
+  const tanggalBayar = input.tanggalBayar ? new Date(input.tanggalBayar) : new Date()
   const sisaPinjaman = Number(jadwal.pinjaman.sisaPinjaman)
 
   const paid = await getPaidForJadwal(jadwal.pinjamanId, jadwal.id)
@@ -259,12 +262,34 @@ export async function getRiwayatPembayaran(pinjamanId: string) {
   })
 }
 
-export async function getRecentPembayaran(limit = 20) {
+export async function getRecentPembayaran(limit = 20, query?: string) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
 
+  const where: Prisma.PembayaranWhereInput = { isBatalkan: false }
+  
+  if (query) {
+    where.OR = [
+      { nomorTransaksi: { contains: query, mode: "insensitive" } },
+      {
+        pinjaman: {
+          nomorKontrak: { contains: query, mode: "insensitive" }
+        }
+      },
+      {
+        pinjaman: {
+          pengajuan: {
+            nasabah: {
+              namaLengkap: { contains: query, mode: "insensitive" }
+            }
+          }
+        }
+      }
+    ]
+  }
+
   return prisma.pembayaran.findMany({
-    where: { isBatalkan: false },
+    where,
     orderBy: { tanggalBayar: "desc" },
     take: limit,
     include: {
@@ -290,6 +315,7 @@ export async function getHistoryPembayaranNasabahReport() {
   if (!session) throw new Error("Unauthorized")
 
   const today = new Date()
+  const rankingConfig = await getRankingConfig()
 
   const nasabahList = await prisma.nasabah.findMany({
     include: {
@@ -369,11 +395,7 @@ export async function getHistoryPembayaranNasabahReport() {
 
     const kurangAngsuran = Math.max(0, totalTagihan - totalDibayar)
 
-    const ranking =
-      telat === 0 && kurangAngsuran <= 0 ? "A" :
-      telat <= 1 && kurangAngsuran < 1_000_000 ? "B" :
-      telat <= 3 && kurangAngsuran < 3_000_000 ? "C" :
-      "D"
+    const ranking = computeRanking({ telat, kurangAngsuran }, rankingConfig)
 
     return {
       nasabahId: nasabah.id,
@@ -391,6 +413,162 @@ export async function getHistoryPembayaranNasabahReport() {
       ranking,
     }
   })
+}
+
+type LaporanTransaksiUserFilter = {
+  kelompokId?: string
+  search?: string
+}
+
+export async function getLaporanTransaksiUserReport(params?: LaporanTransaksiUserFilter) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  const today = new Date()
+  const rankingConfig = await getRankingConfig()
+
+  const [kelompokOptions, nasabahList] = await Promise.all([
+    prisma.kelompok.findMany({
+      select: { id: true, nama: true },
+      orderBy: { nama: "asc" },
+    }),
+    prisma.nasabah.findMany({
+      where: {
+        ...(params?.kelompokId ? { kelompokId: params.kelompokId } : {}),
+        ...(params?.search
+          ? {
+              OR: [
+                { namaLengkap: { contains: params.search, mode: "insensitive" as const } },
+                { nomorAnggota: { contains: params.search, mode: "insensitive" as const } },
+                { nik: { contains: params.search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        kelompok: { select: { nama: true } },
+        pengajuan: {
+          include: {
+            pinjaman: {
+              include: {
+                jadwalAngsuran: {
+                  orderBy: { angsuranKe: "asc" },
+                },
+                pembayaran: {
+                  where: { isBatalkan: false },
+                  select: {
+                    catatan: true,
+                    totalBayar: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { namaLengkap: "asc" },
+    }),
+  ])
+
+  const data = nasabahList.map((nasabah) => {
+    let totalTagihan = 0
+    let totalDibayar = 0
+    let selesai = 0
+    let telat = 0
+    let belumJatuhTempo = 0
+    let belumBayar = 0
+    let outstanding = 0
+    let anomaliPembayaran = 0
+    let anomaliNominal = 0
+
+    const pinjamanAktif = nasabah.pengajuan
+      .map((p) => p.pinjaman)
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+
+    for (const pinjaman of pinjamanAktif) {
+      outstanding += Number(pinjaman.sisaPinjaman)
+      const pembayaranTagMap = new Map<string, number>()
+
+      for (const p of pinjaman.pembayaran) {
+        const tags = p.catatan?.match(/\[JADWAL:([^\]]+)\]/g) ?? []
+        if (tags.length === 0) {
+          anomaliPembayaran += 1
+          anomaliNominal += Number(p.totalBayar)
+          continue
+        }
+        for (const rawTag of tags) {
+          const jadwalId = rawTag.replace("[JADWAL:", "").replace("]", "")
+          const prev = pembayaranTagMap.get(jadwalId) ?? 0
+          pembayaranTagMap.set(jadwalId, prev + Number(p.totalBayar))
+        }
+      }
+
+      for (const jadwal of pinjaman.jadwalAngsuran) {
+        const nominalTagihan = Number(jadwal.total)
+        const bayarParsial = pembayaranTagMap.get(jadwal.id) ?? 0
+        const bayarEfektif = jadwal.sudahDibayar ? nominalTagihan : Math.min(nominalTagihan, bayarParsial)
+
+        totalTagihan += nominalTagihan
+        totalDibayar += bayarEfektif
+
+        if (jadwal.sudahDibayar || bayarEfektif >= nominalTagihan) {
+          selesai += 1
+          if (jadwal.tanggalBayar && jadwal.tanggalBayar > jadwal.tanggalJatuhTempo) {
+            telat += 1
+          }
+          continue
+        }
+
+        if (jadwal.tanggalJatuhTempo > today) {
+          belumJatuhTempo += 1
+        } else {
+          belumBayar += 1
+          telat += 1
+        }
+      }
+    }
+
+    const kurangAngsuran = Math.max(0, totalTagihan - totalDibayar)
+    const ranking = computeRanking({ telat, kurangAngsuran }, rankingConfig)
+
+    return {
+      nasabahId: nasabah.id,
+      nomorAnggota: nasabah.nomorAnggota,
+      namaLengkap: nasabah.namaLengkap,
+      kelompok: nasabah.kelompok?.nama ?? "-",
+      totalTagihan,
+      totalDibayar,
+      kurangAngsuran,
+      outstanding,
+      selesai,
+      telat,
+      belumJatuhTempo,
+      belumBayar,
+      ranking,
+      anomaliPembayaran,
+      anomaliNominal,
+    }
+  })
+
+  const summary = data.reduce(
+    (acc, row) => {
+      acc.totalTagihan += row.totalTagihan
+      acc.totalDibayar += row.totalDibayar
+      acc.kurang += row.kurangAngsuran
+      acc.outstanding += row.outstanding
+      acc.anomaliPembayaran += row.anomaliPembayaran
+      acc.anomaliNominal += row.anomaliNominal
+      if (row.ranking === "A") acc.rankA += 1
+      return acc
+    },
+    { totalTagihan: 0, totalDibayar: 0, kurang: 0, outstanding: 0, rankA: 0, anomaliPembayaran: 0, anomaliNominal: 0 }
+  )
+
+  return {
+    data,
+    summary,
+    kelompokOptions,
+  }
 }
 
 export async function getPembayaranById(id: string) {
@@ -615,5 +793,42 @@ export async function approvePembatalanPembayaran(input: {
   revalidatePath("/monitoring/tunggakan")
   revalidatePath(`/pembayaran/${pembayaran.id}/pembatalan`)
 
+  return { success: true }
+}
+
+export async function editPembayaranMetadata(input: {
+  id: string
+  tanggalBayar?: string
+  metode?: MetodePembayaran
+  buktiBayarUrl?: string
+  catatan?: string
+}) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  try {
+    requireRoles(session, [RoleType.ADMIN, RoleType.MANAGER, RoleType.PIMPINAN, RoleType.TELLER])
+  } catch {
+    return { error: "Tidak memiliki hak akses untuk mengedit." }
+  }
+
+  const existing = await prisma.pembayaran.findUnique({ where: { id: input.id } })
+  if (!existing) return { error: "Transaksi tidak ditemukan." }
+  if (existing.isBatalkan) return { error: "Transaksi batal tidak bisa diedit." }
+
+  const updateData: any = {}
+  if (input.tanggalBayar) updateData.tanggalBayar = new Date(input.tanggalBayar)
+  if (input.metode) updateData.metode = input.metode
+  if (input.buktiBayarUrl !== undefined) updateData.buktiBayarUrl = input.buktiBayarUrl
+  if (input.catatan !== undefined) updateData.catatan = input.catatan
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.pembayaran.update({
+      where: { id: input.id },
+      data: updateData
+    })
+  }
+
+  revalidatePath("/pembayaran")
   return { success: true }
 }

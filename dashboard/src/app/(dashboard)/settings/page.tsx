@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Shield, User, Mail, Phone } from "lucide-react"
+import { getRankingConfig } from "@/actions/settings"
+import { RankingSettingsForm } from "./ranking-settings-form"
 
 const roleLabels: Record<string, { label: string; color: string }> = {
   ADMIN: { label: "Admin", color: "bg-purple-100 text-purple-700" },
@@ -19,6 +21,7 @@ export default async function SettingsPage() {
   const session = await auth()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userRoles: string[] = (session?.user as any)?.roles ?? []
+  const rankingConfig = await getRankingConfig()
 
   return (
     <div className="p-6 space-y-6">
@@ -95,6 +98,8 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <RankingSettingsForm initial={rankingConfig} />
     </div>
   )
 }

@@ -1,11 +1,18 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { getNasabahById } from "@/actions/nasabah"
+import { getRankingConfig } from "@/actions/settings"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Edit, Phone, MapPin, Briefcase, CreditCard } from "lucide-react"
+import { computeRanking } from "@/lib/ranking"
+
+function docTitle(url: string) {
+  const clean = url.split("?")[0]
+  return clean.split("/").filter(Boolean).pop() ?? url
+}
 
 const statusPinjaman: Record<string, string> = {
   AKTIF: "bg-blue-100 text-blue-700",
@@ -28,10 +35,124 @@ function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
 }
 
+function rankingBadge(rank: string) {
+  if (rank === "A") return <Badge className="bg-emerald-100 text-emerald-700">A - Sangat Lancar</Badge>
+  if (rank === "B") return <Badge className="bg-blue-100 text-blue-700">B - Lancar</Badge>
+  if (rank === "C") return <Badge className="bg-amber-100 text-amber-700">C - Perlu Pantau</Badge>
+  return <Badge className="bg-red-100 text-red-700">D - Risiko</Badge>
+}
+
 export default async function NasabahDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const nasabah = await getNasabahById(id)
   if (!nasabah) notFound()
+  const now = new Date()
+  const rankingConfig = await getRankingConfig()
+
+  // Indikator konsistensi dan ranking (mengikuti logika laporan).
+  const indikator = (() => {
+    let totalTagihan = 0
+    let totalDibayar = 0
+    let telat = 0
+    let belumJatuhTempo = 0
+    let belumBayar = 0
+    let outstanding = 0
+    let anomaliPembayaran = 0
+    let anomaliNominal = 0
+
+    const pinjamanList = nasabah.pengajuan
+      .map((p) => p.pinjaman)
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+
+    for (const pinjaman of pinjamanList) {
+      outstanding += Number(pinjaman.sisaPinjaman)
+      const pembayaranTagMap = new Map<string, number>()
+
+      for (const p of pinjaman.pembayaran) {
+        const tags = p.catatan?.match(/\[JADWAL:([^\]]+)\]/g) ?? []
+        if (tags.length === 0) {
+          anomaliPembayaran += 1
+          anomaliNominal += Number(p.totalBayar)
+          continue
+        }
+        for (const rawTag of tags) {
+          const jadwalId = rawTag.replace("[JADWAL:", "").replace("]", "")
+          const prev = pembayaranTagMap.get(jadwalId) ?? 0
+          pembayaranTagMap.set(jadwalId, prev + Number(p.totalBayar))
+        }
+      }
+
+      for (const jadwal of pinjaman.jadwalAngsuran) {
+        const nominalTagihan = Number(jadwal.total)
+        const bayarParsial = pembayaranTagMap.get(jadwal.id) ?? 0
+        const bayarEfektif = jadwal.sudahDibayar ? nominalTagihan : Math.min(nominalTagihan, bayarParsial)
+
+        totalTagihan += nominalTagihan
+        totalDibayar += bayarEfektif
+
+        if (jadwal.sudahDibayar || bayarEfektif >= nominalTagihan) {
+          if (jadwal.tanggalBayar && jadwal.tanggalBayar > jadwal.tanggalJatuhTempo) telat += 1
+          continue
+        }
+
+        if (jadwal.tanggalJatuhTempo > now) {
+          belumJatuhTempo += 1
+        } else {
+          belumBayar += 1
+          telat += 1
+        }
+      }
+    }
+
+    const kurangAngsuran = Math.max(0, totalTagihan - totalDibayar)
+    const ranking = computeRanking({ telat, kurangAngsuran }, rankingConfig)
+
+    return {
+      totalTagihan,
+      totalDibayar,
+      kurangAngsuran,
+      telat,
+      belumJatuhTempo,
+      belumBayar,
+      outstanding,
+      ranking,
+      anomaliPembayaran,
+      anomaliNominal,
+    }
+  })()
+
+  const transaksiTerjadi = nasabah.pengajuan
+    .flatMap((p) =>
+      (p.pinjaman?.pembayaran ?? []).map((bayar) => ({
+        id: bayar.id,
+        tanggal: bayar.tanggalBayar,
+        kontrak: p.pinjaman?.nomorKontrak ?? "-",
+        total: Number(bayar.totalBayar),
+        pokok: Number(bayar.pokok),
+        bunga: Number(bayar.bunga),
+        denda: Number(bayar.denda),
+        metode: bayar.metode,
+        petugas: bayar.inputOleh.name,
+      }))
+    )
+    .sort((a, b) => b.tanggal.getTime() - a.tanggal.getTime())
+
+  const transaksiAkanDatang = nasabah.pengajuan
+    .flatMap((p) =>
+      (p.pinjaman?.jadwalAngsuran ?? [])
+        .filter((jadwal) => !jadwal.sudahDibayar)
+        .map((jadwal) => ({
+          id: jadwal.id,
+          tanggalJatuhTempo: jadwal.tanggalJatuhTempo,
+          kontrak: p.pinjaman?.nomorKontrak ?? "-",
+          angsuranKe: jadwal.angsuranKe,
+          total: Number(jadwal.total),
+          pokok: Number(jadwal.pokok),
+          bunga: Number(jadwal.bunga),
+          status: jadwal.tanggalJatuhTempo < now ? "TERLAMBAT" : "UPCOMING",
+        }))
+    )
+    .sort((a, b) => a.tanggalJatuhTempo.getTime() - b.tanggalJatuhTempo.getTime())
 
   const infoItems = [
     { icon: Phone, label: "No. HP", value: nasabah.noHp },
@@ -98,6 +219,48 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Indikator</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground text-xs">Ranking</span>
+              {rankingBadge(indikator.ranking)}
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Telat</p>
+                <p className="font-semibold text-red-600">{indikator.telat.toLocaleString("id-ID")}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Belum JT</p>
+                <p className="font-semibold">{indikator.belumJatuhTempo.toLocaleString("id-ID")}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Kurang</p>
+                <p className="font-semibold">{fmt(indikator.kurangAngsuran)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Outstanding</p>
+                <p className="font-semibold text-blue-700">{fmt(indikator.outstanding)}</p>
+              </div>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground text-xs">Anomali pencatatan</span>
+              {indikator.anomaliPembayaran > 0 ? (
+                <Badge className="bg-amber-100 text-amber-700">
+                  {indikator.anomaliPembayaran} trx ({fmt(indikator.anomaliNominal)})
+                </Badge>
+              ) : (
+                <Badge className="bg-emerald-100 text-emerald-700">0</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Penjamin */}
         <Card>
           <CardHeader>
@@ -118,6 +281,32 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Dokumen Terlampir</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {nasabah.dokumenUrls.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Belum ada dokumen terlampir.</p>
+          ) : (
+            <div className="space-y-2">
+              {nasabah.dokumenUrls.map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded border px-3 py-2 hover:bg-muted/30"
+                >
+                  <div className="text-sm font-medium truncate">{docTitle(url)}</div>
+                  <div className="text-xs text-muted-foreground truncate">{url}</div>
+                </a>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Riwayat Pengajuan */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -134,6 +323,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Tenor</th>
                   <th className="text-right px-4 py-2.5 font-medium">Sisa Pinjaman</th>
                   <th className="text-left px-4 py-2.5 hidden md:table-cell font-medium">No. Kontrak</th>
                   <th className="text-left px-4 py-2.5 font-medium">Tanggal</th>
@@ -142,11 +332,28 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
               </thead>
               <tbody>
                 {nasabah.pengajuan.map((p) => (
+                  // Progress tenor ditampilkan jika sudah ada pinjaman + jadwal.
+                  // Format: Bulanan 1/12, Mingguan 3/16
                   <tr key={p.id} className="border-b hover:bg-muted/20">
                     <td className="px-4 py-2.5">
                       <Badge className={`${statusPengajuan[p.status]} border-0`}>{p.status}</Badge>
                       {p.pinjaman && (
                         <Badge className={`${statusPinjaman[p.pinjaman.status]} border-0 ml-1`}>{p.pinjaman.status}</Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {p.pinjaman ? (
+                        (() => {
+                          const total = p.pinjaman.tenor
+                          const paid = p.pinjaman.jadwalAngsuran.filter((j) => j.sudahDibayar).length
+                          const label = p.pinjaman.tenorType === "MINGGUAN" ? "Mingguan" : "Bulanan"
+                          return `${label} ${paid}/${total}`
+                        })()
+                      ) : (
+                        (() => {
+                          const label = p.tenorType === "MINGGUAN" ? "Mingguan" : "Bulanan"
+                          return `${label} 0/${p.tenor}`
+                        })()
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right font-medium">
@@ -158,10 +365,105 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">
                       {new Date(p.tanggalPengajuan).toLocaleDateString("id-ID")}
                     </td>
+                    <td className="px-4 py-2.5 flex justify-end gap-1">
+                      {p.pinjaman && (
+                        <Link 
+                          href={`/dokumen/kartu-angsuran/${p.pinjaman.id}`}
+                          className="inline-flex items-center justify-center rounded-md text-xs font-medium border h-7 px-2.5 hover:bg-indigo-50 text-indigo-700 border-indigo-200"
+                        >
+                          Kartu
+                        </Link>
+                      )}
+                      <Link 
+                        href={`/pengajuan/${p.id}`}
+                        className="inline-flex items-center justify-center rounded-md text-xs font-medium hover:bg-slate-100 h-7 px-2.5"
+                      >
+                        Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Log Detail Transaksi Terjadi</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {transaksiTerjadi.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-4">Belum ada transaksi pembayaran yang tercatat.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left px-4 py-2.5 font-medium">Tanggal</th>
+                  <th className="text-left px-4 py-2.5 font-medium">No. Kontrak</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Pokok</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Bunga</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Denda</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Total</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Petugas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transaksiTerjadi.map((row) => (
+                  <tr key={row.id} className="border-b hover:bg-muted/20">
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {new Date(row.tanggal).toLocaleDateString("id-ID")}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{row.kontrak}</td>
+                    <td className="px-4 py-2.5 text-right">{fmt(row.pokok)}</td>
+                    <td className="px-4 py-2.5 text-right">{fmt(row.bunga)}</td>
+                    <td className="px-4 py-2.5 text-right text-orange-600">{fmt(row.denda)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold">{fmt(row.total)}</td>
+                    <td className="px-4 py-2.5 text-xs">{row.petugas}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Daftar Transaksi Akan Datang</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {transaksiAkanDatang.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-4">Tidak ada jadwal transaksi yang akan datang.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left px-4 py-2.5 font-medium">Jatuh Tempo</th>
+                  <th className="text-left px-4 py-2.5 font-medium">No. Kontrak</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Angsuran Ke</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Pokok</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Bunga</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Total</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transaksiAkanDatang.map((row) => (
+                  <tr key={row.id} className="border-b hover:bg-muted/20">
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {new Date(row.tanggalJatuhTempo).toLocaleDateString("id-ID")}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{row.kontrak}</td>
+                    <td className="px-4 py-2.5 text-right">{row.angsuranKe}</td>
+                    <td className="px-4 py-2.5 text-right">{fmt(row.pokok)}</td>
+                    <td className="px-4 py-2.5 text-right">{fmt(row.bunga)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold">{fmt(row.total)}</td>
                     <td className="px-4 py-2.5">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/pengajuan/${p.id}`}>Detail</Link>
-                      </Button>
+                      <Badge className={row.status === "TERLAMBAT" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}>
+                        {row.status === "TERLAMBAT" ? "Terlambat" : "Akan Datang"}
+                      </Badge>
                     </td>
                   </tr>
                 ))}

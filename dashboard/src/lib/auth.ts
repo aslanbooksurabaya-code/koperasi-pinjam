@@ -9,6 +9,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
   },
+  logger: {
+    error(error) {
+      // Invalid credentials are expected during login attempts; avoid noisy server error logs.
+      const raw = String(error)
+      if (raw.includes("CredentialsSignin")) return
+      console.error("[auth][error]", error)
+    },
+  },
   providers: [
     Credentials({
       credentials: {
@@ -19,7 +27,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const parsed = z.object({
           email: z.string().email(),
           password: z.string().min(6),
-        }).safeParse(credentials)
+        }).safeParse({
+          email: typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "",
+          password: typeof credentials?.password === "string" ? credentials.password : "",
+        })
 
         if (!parsed.success) return null
 

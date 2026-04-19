@@ -150,6 +150,13 @@ export default async function PengajuanDetailPage({ params }: { params: Promise<
                   <span className="text-muted-foreground">Tgl. Cair</span>
                   <span>{new Date(pengajuan.pinjaman.tanggalCair).toLocaleDateString("id-ID")}</span>
                 </div>
+                <div className="pt-2 mt-2 border-t">
+                  <Button asChild variant="outline" className="w-full text-indigo-700 border-indigo-200 bg-indigo-50 hover:bg-indigo-100">
+                    <Link href={`/dokumen/kartu-angsuran/${pengajuan.pinjaman.id}`}>
+                      Cetak Kartu Angsuran
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

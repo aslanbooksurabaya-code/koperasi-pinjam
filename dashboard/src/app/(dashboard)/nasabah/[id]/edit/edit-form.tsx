@@ -4,7 +4,7 @@ import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Save } from "lucide-react"
+import { Save, Upload, X } from "lucide-react"
 import { updateNasabah } from "@/actions/nasabah"
 import { nasabahSchema, type NasabahInput } from "@/lib/validations/nasabah"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,12 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { useState } from "react"
+
+function docTitle(url: string) {
+  const clean = url.split("?")[0]
+  return clean.split("/").filter(Boolean).pop() ?? url
+}
 
 type FormNasabah = {
   id: string
@@ -28,6 +34,7 @@ type FormNasabah = {
   noHp: string
   pekerjaan: string | null
   namaUsaha: string | null
+  dokumenUrls: string[]
   status: "AKTIF" | "NON_AKTIF" | "KELUAR"
   kelompokId: string | null
   kolektorId: string | null
@@ -43,6 +50,9 @@ export function EditNasabahForm({
   kolektorList: { id: string; name: string }[]
 }) {
   const [isPending, startTransition] = useTransition()
+  const [isUploadingDokumen, setIsUploadingDokumen] = useState(false)
+  const [dokumenText, setDokumenText] = useState("")
+  const [uploadedDokumen, setUploadedDokumen] = useState<string[]>(nasabah.dokumenUrls ?? [])
   const router = useRouter()
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<NasabahInput>({
@@ -59,11 +69,50 @@ export function EditNasabahForm({
       noHp: nasabah.noHp,
       pekerjaan: nasabah.pekerjaan ?? "",
       namaUsaha: nasabah.namaUsaha ?? "",
+      dokumenUrls: nasabah.dokumenUrls ?? [],
       status: nasabah.status,
       kelompokId: nasabah.kelompokId ?? undefined,
       kolektorId: nasabah.kolektorId ?? undefined,
     },
   })
+
+  function parseDokumen(raw: string): string[] {
+    return raw
+      .split(/\n|,/)
+      .map((v) => v.trim())
+      .filter(Boolean)
+  }
+
+  function syncDokumenValue(rawText: string, uploaded: string[]) {
+    const merged = Array.from(new Set([...parseDokumen(rawText), ...uploaded]))
+    setValue("dokumenUrls", merged, { shouldValidate: true })
+  }
+
+  async function handleUploadDokumen(files: FileList | null) {
+    if (!files || files.length === 0) return
+
+    setIsUploadingDokumen(true)
+    try {
+      const formData = new FormData()
+      Array.from(files).forEach((file) => formData.append("files", file))
+
+      const res = await fetch("/api/upload/nasabah", { method: "POST", body: formData })
+      const json = (await res.json()) as { urls?: string[]; error?: string }
+
+      if (!res.ok || !json.urls?.length) {
+        throw new Error(json.error ?? "Upload dokumen gagal.")
+      }
+
+      const nextUploaded = Array.from(new Set([...uploadedDokumen, ...json.urls]))
+      setUploadedDokumen(nextUploaded)
+      syncDokumenValue(dokumenText, nextUploaded)
+      toast.success("Dokumen berhasil diupload.")
+    } catch {
+      toast.error("Upload dokumen gagal.")
+    } finally {
+      setIsUploadingDokumen(false)
+    }
+  }
 
   const onSubmit = (data: NasabahInput) => {
     startTransition(async () => {
@@ -187,6 +236,59 @@ export function EditNasabahForm({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="dokumenPendukung">Dokumen Pendukung</Label>
+            <Textarea
+              id="dokumenPendukung"
+              placeholder="Masukkan URL dokumen manual (1 baris 1 URL)"
+              rows={3}
+              value={dokumenText}
+              onChange={(e) => {
+                const nextText = e.target.value
+                setDokumenText(nextText)
+                syncDokumenValue(nextText, uploadedDokumen)
+              }}
+            />
+            <Input
+              id="dokumenFile"
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              onChange={(e) => {
+                void handleUploadDokumen(e.target.files)
+                e.currentTarget.value = ""
+              }}
+              disabled={isUploadingDokumen}
+            />
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Upload className="size-3" /> {isUploadingDokumen ? "Sedang upload..." : "Upload file dokumen (max 5MB per file)."}
+            </p>
+            {uploadedDokumen.length > 0 && (
+              <div className="space-y-1">
+                {uploadedDokumen.map((url) => (
+                  <div key={url} className="flex items-center justify-between rounded border px-2 py-1 text-xs">
+                    <div className="min-w-0 pr-2">
+                      <div className="truncate font-medium">{docTitle(url)}</div>
+                      <div className="truncate text-muted-foreground">{url}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-red-500 hover:text-red-600"
+                      onClick={() => {
+                        const nextUploaded = uploadedDokumen.filter((v) => v !== url)
+                        setUploadedDokumen(nextUploaded)
+                        syncDokumenValue(dokumenText, nextUploaded)
+                      }}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {errors.dokumenUrls && <p className="text-xs text-red-500">Dokumen pendukung tidak valid.</p>}
           </div>
 
           <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isPending}>

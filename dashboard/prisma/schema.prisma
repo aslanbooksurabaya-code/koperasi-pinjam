@@ -423,3 +423,15 @@ model Notifikasi {
   @@index([userId, isRead, createdAt])
   @@map("notifikasi")
 }
+
+// ========================
+// APP SETTINGS
+// ========================
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}

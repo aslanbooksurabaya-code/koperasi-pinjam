@@ -20,9 +20,15 @@ function agingBadge(hari: number) {
   return <Badge className="bg-red-700 text-white">{hari}h (NPL)</Badge>
 }
 
-export default async function PembayaranPage() {
+import { EditPembayaranButton } from "./edit-button"
+
+export default async function PembayaranPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q } = await searchParams
   const today = new Date()
-  const [jadwals, recentPembayaran] = await Promise.all([getAngsuranJatuhTempo(), getRecentPembayaran(15)])
+  const [jadwals, recentPembayaran] = await Promise.all([
+    getAngsuranJatuhTempo(), 
+    getRecentPembayaran(15, q)
+  ])
 
   const totalTagihan = jadwals.reduce((a, j) => a + Number(j.total), 0)
   const totalDenda = jadwals.reduce((a, j) => {
@@ -114,8 +120,17 @@ export default async function PembayaranPage() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Riwayat Pembayaran Terbaru</CardTitle>
+          <form className="max-w-xs w-full" method="GET" action="/pembayaran">
+            <input
+              type="text"
+              name="q"
+              defaultValue={q ?? ""}
+              placeholder="Cari transaksi / nasabah..."
+              className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </form>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -126,7 +141,7 @@ export default async function PembayaranPage() {
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead className="hidden lg:table-cell">Petugas</TableHead>
-                <TableHead className="w-[120px]" />
+                <TableHead className="w-[180px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -144,10 +159,24 @@ export default async function PembayaranPage() {
                     <TableCell className="text-sm">{new Date(p.tanggalBayar).toLocaleDateString("id-ID")}</TableCell>
                     <TableCell className="font-semibold">{fmt(Number(p.totalBayar))}</TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{p.inputOleh.name}</TableCell>
-                    <TableCell>
-                      <Link href={`/pembayaran/${p.id}/pembatalan`}>
+                    <TableCell className="flex gap-2 justify-end items-center">
+                      <Link href={`/dokumen/kuitansi/${p.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs">
-                          Pembatalan
+                          Cetak
+                        </Button>
+                      </Link>
+                      <EditPembayaranButton 
+                        data={{
+                          id: p.id,
+                          tanggalBayar: p.tanggalBayar,
+                          metode: p.metode,
+                          buktiBayarUrl: p.buktiBayarUrl,
+                          catatan: p.catatan
+                        }} 
+                      />
+                      <Link href={`/pembayaran/${p.id}/pembatalan`}>
+                        <Button size="sm" variant="secondary" className="h-7 text-xs text-rose-600 bg-rose-50 hover:bg-rose-100 border-none">
+                          Batal
                         </Button>
                       </Link>
                     </TableCell>

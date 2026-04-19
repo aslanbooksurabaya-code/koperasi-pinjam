@@ -33,23 +33,34 @@ function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
 }
 
+import { NumericFormat } from "react-number-format"
+import { KasRowActions } from "./kas-row-actions"
+
 export function KasClientPage({ initialData }: { initialData: KasData }) {
   const [isPending, startTransition] = useTransition()
   const [jenis, setJenis] = useState<"MASUK" | "KELUAR">("MASUK")
   const [kategori, setKategori] = useState("ANGSURAN")
-  const [jumlah, setJumlah] = useState("")
+  const [isCustomKategori, setIsCustomKategori] = useState(false)
+  const [customKategori, setCustomKategori] = useState("")
+  const [jumlah, setJumlah] = useState<number>(0)
   const [deskripsi, setDeskripsi] = useState("")
   const [kasJenis, setKasJenis] = useState<"TUNAI" | "BANK">("TUNAI")
 
   const saldoAkhir = initialData.saldoAwal + initialData.totalMasuk - initialData.totalKeluar
 
   const submitKas = () => {
+    const finalKategori = isCustomKategori ? customKategori : kategori
+    if (!finalKategori.trim()) {
+      toast.error("Kategori tidak boleh kosong")
+      return
+    }
+
     startTransition(async () => {
       const result = await inputKas({
         jenis,
-        kategori,
+        kategori: finalKategori,
         deskripsi,
-        jumlah: Number(jumlah),
+        jumlah,
         kasJenis,
       })
 
@@ -110,6 +121,7 @@ export function KasClientPage({ initialData }: { initialData: KasData }) {
                     <TableHead>Deskripsi</TableHead>
                     <TableHead className="text-right">Jumlah</TableHead>
                     <TableHead>Input Oleh</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -129,6 +141,9 @@ export function KasClientPage({ initialData }: { initialData: KasData }) {
                         {row.jenis === "MASUK" ? "+" : "-"} {fmt(Number(row.jumlah))}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{row.inputOleh.name}</TableCell>
+                      <TableCell>
+                        <KasRowActions data={row as any} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -144,7 +159,11 @@ export function KasClientPage({ initialData }: { initialData: KasData }) {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Jenis Transaksi</Label>
-                  <Select onValueChange={(v) => setJenis(v as "MASUK" | "KELUAR")} defaultValue="MASUK">
+                  <Select onValueChange={(v) => {
+                    setJenis(v as "MASUK" | "KELUAR")
+                    setKategori(v === "MASUK" ? "ANGSURAN" : "OPERASIONAL")
+                    setIsCustomKategori(false)
+                  }} value={jenis}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -155,34 +174,62 @@ export function KasClientPage({ initialData }: { initialData: KasData }) {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Kategori</Label>
-                  <Select onValueChange={(v) => setKategori(v ?? "LAINNYA")} value={kategori}>
-                    <SelectTrigger><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
-                    <SelectContent>
-                      {jenis === "MASUK" ? (
-                        <>
-                          <SelectItem value="ANGSURAN">Angsuran Nasabah</SelectItem>
-                          <SelectItem value="SIMPANAN">Simpanan Anggota</SelectItem>
-                          <SelectItem value="ADMIN">Biaya Administrasi</SelectItem>
-                          <SelectItem value="DENDA">Denda</SelectItem>
-                          <SelectItem value="LAINNYA">Lainnya</SelectItem>
-                        </>
-                      ) : (
-                        <>
-                          <SelectItem value="PENCAIRAN">Pencairan Pinjaman</SelectItem>
-                          <SelectItem value="GAJI">Gaji/Insentif</SelectItem>
-                          <SelectItem value="OPERASIONAL">Biaya Operasional</SelectItem>
-                          <SelectItem value="LAINNYA">Lainnya</SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <Label>Kategori Pembukuan</Label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Select onValueChange={(v) => {
+                      if (!v) return;
+                      if (v === "__CUSTOM__") setIsCustomKategori(true)
+                      else {
+                        setIsCustomKategori(false)
+                        setKategori(v)
+                      }
+                    }} value={isCustomKategori ? "__CUSTOM__" : kategori}>
+                      <SelectTrigger className={isCustomKategori ? "sm:w-[160px]" : "w-full"}><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                      <SelectContent>
+                        {jenis === "MASUK" ? (
+                          <>
+                            <SelectItem value="ANGSURAN">Angsuran</SelectItem>
+                            <SelectItem value="SIMPANAN">Simpanan</SelectItem>
+                            <SelectItem value="ADMIN">Biaya Admin</SelectItem>
+                            <SelectItem value="DENDA">Denda</SelectItem>
+                            <SelectItem value="LAINNYA">Lainnya</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="PENCAIRAN">Pencairan</SelectItem>
+                            <SelectItem value="GAJI">Gaji/Insentif</SelectItem>
+                            <SelectItem value="OPERASIONAL">Operasional</SelectItem>
+                            <SelectItem value="LAINNYA">Lainnya</SelectItem>
+                          </>
+                        )}
+                        <SelectItem value="__CUSTOM__">Tambah Kategori Baru...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {isCustomKategori && (
+                      <Input 
+                        placeholder="Ketik Kategori Baru..." 
+                        value={customKategori} 
+                        onChange={(e) => setCustomKategori(e.target.value)}
+                        className="flex-1"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Jumlah (Rp)</Label>
-                  <Input value={jumlah} onChange={(e) => setJumlah(e.target.value)} placeholder="Contoh: 5000000" />
+                  <NumericFormat
+                    customInput={Input}
+                    thousandSeparator="."
+                    decimalSeparator=","
+                    value={jumlah || ""}
+                    onValueChange={(values) => {
+                      setJumlah(values.floatValue || 0)
+                    }}
+                    placeholder="Contoh: 5.000.000"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Jenis Kas</Label>

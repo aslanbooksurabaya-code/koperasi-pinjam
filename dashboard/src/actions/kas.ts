@@ -82,6 +82,74 @@ export async function inputKas(input: unknown) {
   return { success: true }
 }
 
+export async function updateKas(id: string, input: unknown) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+  let userId: string
+  try {
+    const required = requireRoles(session, [RoleType.ADMIN, RoleType.MANAGER, RoleType.PIMPINAN])
+    userId = required.userId
+  } catch {
+    return { error: "Tidak memiliki hak akses." }
+  }
+
+  const parsed = kasSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+
+  const { tanggal, jumlah, ...rest } = parsed.data
+
+  const existing = await prisma.kasTransaksi.findUnique({ where: { id } })
+  if (!existing) return { error: "Data tidak ditemukan." }
+
+  const kas = await prisma.kasTransaksi.update({
+    where: { id },
+    data: {
+      ...rest,
+      jumlah: new Prisma.Decimal(jumlah),
+      tanggal: tanggal ? new Date(tanggal) : new Date(),
+    },
+  })
+
+  revalidatePath("/kas")
+  revalidatePath("/laporan/laba-rugi")
+  await writeAuditLog({
+    actorId: userId,
+    entityType: "KAS_TRANSAKSI",
+    entityId: kas.id,
+    action: "UPDATE",
+    afterData: { jenis: kas.jenis, kategori: kas.kategori, jumlah: kas.jumlah.toString() },
+  })
+  return { success: true }
+}
+
+export async function deleteKas(id: string) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+  let userId: string
+  try {
+    const required = requireRoles(session, [RoleType.ADMIN, RoleType.MANAGER, RoleType.PIMPINAN])
+    userId = required.userId
+  } catch {
+    return { error: "Tidak memiliki hak akses." }
+  }
+
+  const existing = await prisma.kasTransaksi.findUnique({ where: { id } })
+  if (!existing) return { error: "Data tidak ditemukan." }
+
+  await prisma.kasTransaksi.delete({ where: { id } })
+
+  revalidatePath("/kas")
+  revalidatePath("/laporan/laba-rugi")
+  await writeAuditLog({
+    actorId: userId,
+    entityType: "KAS_TRANSAKSI",
+    entityId: id,
+    action: "DELETE",
+    afterData: { jenis: existing.jenis, jumlah: existing.jumlah.toString() },
+  })
+  return { success: true }
+}
+
 export async function getKasBulanan(bulan: number, tahun: number) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")

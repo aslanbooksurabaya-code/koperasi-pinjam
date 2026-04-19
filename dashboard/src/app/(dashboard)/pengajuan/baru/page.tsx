@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { NumericFormat } from "react-number-format"
 import { pengajuanSchema, type PengajuanInput } from "@/lib/validations/pengajuan"
 import { createPengajuan, getNasabahPengajuanOptions } from "@/actions/pengajuan"
 import { Button } from "@/components/ui/button"
@@ -235,28 +236,68 @@ export default function PengajuanBaruPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Tenor ({tipeTenor === "MINGGUAN" ? "minggu" : "bulan"}) <span className="text-red-500">*</span></Label>
-                <Select defaultValue="12" onValueChange={(v) => setValue("tenor", Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(tipeTenor === "MINGGUAN" ? [4, 8, 12, 16, 20, 24] : [3, 6, 9, 12, 18, 24, 36]).map((t) => (
-                      <SelectItem key={t} value={String(t)}>
-                        {t} {tipeTenor === "MINGGUAN" ? "minggu" : "bulan"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="tenor">Tenor ({tipeTenor === "MINGGUAN" ? "minggu" : "bulan"}) <span className="text-red-500">*</span></Label>
+                <Controller
+                  control={control}
+                  name="tenor"
+                  render={({ field: { onChange, value } }) => (
+                    <NumericFormat
+                      id="tenor"
+                      customInput={Input}
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      value={value ?? ""}
+                      onValueChange={(values) => {
+                        onChange(values.floatValue || 0)
+                      }}
+                      placeholder="contoh: 12"
+                    />
+                  )}
+                />
+                {errors.tenor && <p className="text-xs text-red-500">{errors.tenor.message}</p>}
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="plafonDiajukan">Plafon Diajukan (Rp) <span className="text-red-500">*</span></Label>
-                  <Input id="plafonDiajukan" type="number" {...register("plafonDiajukan")} placeholder="5000000" />
+                  <Controller
+                    control={control}
+                    name="plafonDiajukan"
+                    render={({ field: { onChange, value } }) => (
+                      <NumericFormat
+                        id="plafonDiajukan"
+                        customInput={Input}
+                        thousandSeparator="."
+                        decimalSeparator=","
+                        value={value || ""}
+                        onValueChange={(values) => {
+                          onChange(values.floatValue || 0)
+                        }}
+                        placeholder="10.000.000"
+                      />
+                    )}
+                  />
                   {errors.plafonDiajukan && <p className="text-xs text-red-500">{errors.plafonDiajukan.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="bungaPerBulan">Bunga Flat/{tipeTenor === "MINGGUAN" ? "minggu" : "bulan"} (%) <span className="text-red-500">*</span></Label>
-                  <Input id="bungaPerBulan" type="number" step="0.1" {...register("bungaPerBulan")} defaultValue="1.5" />
+                  <Controller
+                    control={control}
+                    name="bungaPerBulan"
+                    render={({ field: { onChange, value } }) => (
+                      <NumericFormat
+                        id="bungaPerBulan"
+                        customInput={Input}
+                        thousandSeparator="."
+                        decimalSeparator=","
+                        value={value ?? ""}
+                        onValueChange={(values) => {
+                          onChange(values.floatValue || 0)
+                        }}
+                        placeholder="contoh: 1,5"
+                      />
+                    )}
+                  />
                   {errors.bungaPerBulan && <p className="text-xs text-red-500">{errors.bungaPerBulan.message}</p>}
                 </div>
               </div>

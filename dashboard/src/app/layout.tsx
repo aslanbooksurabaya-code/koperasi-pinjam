@@ -28,7 +28,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id" className={`${manrope.variable} ${inter.variable} antialiased`}>
+    <html
+      lang="id"
+      className={`${manrope.variable} ${inter.variable} antialiased`}
+      suppressHydrationWarning
+    >
       <body>
         {children}
         <Toaster richColors position="top-right" />

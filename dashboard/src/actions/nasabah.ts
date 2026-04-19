@@ -70,8 +70,20 @@ export async function getNasabahById(id: string) {
       kolektor: { select: { id: true, name: true, email: true } },
       pengajuan: {
         orderBy: { tanggalPengajuan: "desc" },
-        take: 5,
-        include: { pinjaman: { select: { nomorKontrak: true, status: true, sisaPinjaman: true } } },
+        include: {
+          pinjaman: {
+            include: {
+              jadwalAngsuran: {
+                orderBy: { tanggalJatuhTempo: "asc" },
+              },
+              pembayaran: {
+                where: { isBatalkan: false },
+                orderBy: { tanggalBayar: "desc" },
+                include: { inputOleh: { select: { name: true } } },
+              },
+            },
+          },
+        },
       },
       penjamin: true,
     },

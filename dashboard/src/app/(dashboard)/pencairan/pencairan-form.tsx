@@ -56,7 +56,7 @@ export function PencairanForm({ pengajuan }: Props) {
         return
       }
       toast.success(`Pinjaman berhasil dicairkan! No. Kontrak: ${result.data?.nomorKontrak}`)
-      router.push("/pengajuan")
+      router.push(`/dokumen/pencairan/${pengajuan.id}`)
     })
   }
 
