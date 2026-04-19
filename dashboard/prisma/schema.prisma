@@ -47,6 +47,7 @@ model User {
   nasabahSebagaiKolektor Nasabah[]      @relation("KolektorNasabah")
   pembayaranDiinput      Pembayaran[]
   kasDiinput             KasTransaksi[]
+  rekonsiliasiDibuat     RekonsiliasiKas[] @relation("RekonsiliasiCreatedBy")
   pengajuanDisurvey      Pengajuan[]    @relation("SurveyorPengajuan")
   pengajuanDisetujui     Pengajuan[]    @relation("ApproverPengajuan")
   auditLogs              AuditLog[]     @relation("AuditActor")
@@ -303,11 +304,73 @@ enum JenisKas {
   KELUAR
 }
 
+// ========================
+// AKUNTANSI (COA + REKONSILIASI)
+// ========================
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Account {
+  id        String      @id @default(cuid())
+  code      String      @unique
+  name      String
+  type      AccountType
+  isActive  Boolean     @default(true)
+
+  kasKategori KasKategori[]
+  rekonsiliasi RekonsiliasiKas[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, isActive])
+  @@map("accounts")
+}
+
+enum RekonsiliasiStatus {
+  DRAFT
+  SELESAI
+}
+
+model RekonsiliasiKas {
+  id          String             @id @default(cuid())
+  accountId   String
+  account     Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  periodMonth Int
+  periodYear  Int
+
+  saldoStatement Decimal @db.Decimal(15, 2)
+  saldoBook      Decimal @db.Decimal(15, 2)
+  selisih        Decimal @db.Decimal(15, 2)
+
+  catatan     String?
+  buktiUrl    String?
+  status      RekonsiliasiStatus @default(DRAFT)
+
+  createdById String
+  createdBy   User               @relation("RekonsiliasiCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, periodMonth, periodYear])
+  @@index([periodYear, periodMonth])
+  @@map("rekonsiliasi_kas")
+}
+
 model KasKategori {
   id        String   @id @default(cuid())
   nama      String
   key       String   @unique
   jenis     JenisKas
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react"
 import {
   LayoutDashboard, Users, Banknote, FileText,
   FileBarChart, Settings, CreditCard, PiggyBank,
-  AlertTriangle, TrendingDown, LogOut, Building2, Activity
+  AlertTriangle, TrendingDown, LogOut, Building2, Activity, BookOpen, Landmark, Tags
 } from "lucide-react"
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -40,6 +40,13 @@ const navigation = [
     ],
   },
   {
+    label: "Akuntansi",
+    items: [
+      { title: "Daftar Akun (COA)", url: "/akuntansi/akun", icon: Landmark },
+      { title: "Mapping Kategori", url: "/akuntansi/mapping-kategori", icon: Tags },
+    ],
+  },
+  {
     label: "Monitoring",
     items: [
       { title: "Tunggakan", url: "/monitoring/tunggakan", icon: AlertTriangle },
@@ -50,6 +57,9 @@ const navigation = [
     label: "Laporan",
     items: [
       { title: "Transaksi User", url: "/laporan/transaksi-per-user", icon: FileBarChart },
+      { title: "Buku Besar", url: "/laporan/buku-besar", icon: BookOpen },
+      { title: "Neraca", url: "/laporan/neraca", icon: FileBarChart },
+      { title: "Rekonsiliasi", url: "/laporan/rekonsiliasi", icon: FileBarChart },
       { title: "Arus Kas", url: "/laporan/arus-kas", icon: FileBarChart },
       { title: "Laba Rugi", url: "/laporan/laba-rugi", icon: TrendingDown },
     ],
