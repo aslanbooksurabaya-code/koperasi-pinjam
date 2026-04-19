@@ -1,10 +1,12 @@
-import { getAngsuranJatuhTempo } from "@/actions/pembayaran"
+import { getAngsuranJatuhTempo, getRecentPembayaran } from "@/actions/pembayaran"
 import { hitungDenda } from "@/lib/pembayaran"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BayarButton } from "./bayar-button"
 import { differenceInDays } from "date-fns"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
@@ -20,7 +22,7 @@ function agingBadge(hari: number) {
 
 export default async function PembayaranPage() {
   const today = new Date()
-  const jadwals = await getAngsuranJatuhTempo()
+  const [jadwals, recentPembayaran] = await Promise.all([getAngsuranJatuhTempo(), getRecentPembayaran(15)])
 
   const totalTagihan = jadwals.reduce((a, j) => a + Number(j.total), 0)
   const totalDenda = jadwals.reduce((a, j) => {
@@ -66,7 +68,7 @@ export default async function PembayaranPage() {
                 <TableHead>Total Tagihan</TableHead>
                 <TableHead className="hidden lg:table-cell text-red-500">Denda</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[100px]" />
+                <TableHead className="w-[280px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,6 +107,52 @@ export default async function PembayaranPage() {
                     </TableRow>
                   )
                 })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Riwayat Pembayaran Terbaru</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40">
+                <TableHead>Nasabah</TableHead>
+                <TableHead className="hidden md:table-cell">No. Kontrak</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead className="hidden lg:table-cell">Petugas</TableHead>
+                <TableHead className="w-[120px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentPembayaran.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    Belum ada pembayaran tercatat.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                recentPembayaran.map((p) => (
+                  <TableRow key={p.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">{p.pinjaman.pengajuan.nasabah.namaLengkap}</TableCell>
+                    <TableCell className="hidden md:table-cell font-mono text-xs">{p.pinjaman.nomorKontrak}</TableCell>
+                    <TableCell className="text-sm">{new Date(p.tanggalBayar).toLocaleDateString("id-ID")}</TableCell>
+                    <TableCell className="font-semibold">{fmt(Number(p.totalBayar))}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{p.inputOleh.name}</TableCell>
+                    <TableCell>
+                      <Link href={`/pembayaran/${p.id}/pembatalan`}>
+                        <Button size="sm" variant="outline" className="h-7 text-xs">
+                          Pembatalan
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>

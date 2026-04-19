@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { kelompokSchema, type KelompokInput } from "@/lib/validations/kelompok"
+import { kelompokSchema } from "@/lib/validations/kelompok"
 
 export async function getKelompokList(params?: { search?: string }) {
   const session = await auth()
