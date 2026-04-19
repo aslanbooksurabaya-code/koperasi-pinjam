@@ -1,0 +1,417 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ========================
+// AUTH & USER MANAGEMENT (Multi-Role)
+// ========================
+
+enum RoleType {
+  ADMIN
+  TELLER
+  KOLEKTOR
+  SURVEYOR
+  MANAGER
+  PIMPINAN
+  AKUNTANSI
+}
+
+model UserRole {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   RoleType
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  password  String
+  roles     UserRole[]
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relasi
+  nasabahSebagaiKolektor Nasabah[]      @relation("KolektorNasabah")
+  pembayaranDiinput      Pembayaran[]
+  kasDiinput             KasTransaksi[]
+  pengajuanDisurvey      Pengajuan[]    @relation("SurveyorPengajuan")
+  pengajuanDisetujui     Pengajuan[]    @relation("ApproverPengajuan")
+  auditLogs              AuditLog[]     @relation("AuditActor")
+  approvalRequested      ApprovalLog[]  @relation("ApprovalRequester")
+  approvalApproved       ApprovalLog[]  @relation("ApprovalApprover")
+  kolektorTargets        KolektorTarget[] @relation("KolektorTargetUser")
+  notifikasi             Notifikasi[]   @relation("UserNotifikasi")
+
+  @@map("users")
+}
+
+// ========================
+// MASTER DATA
+// ========================
+
+enum StatusNasabah {
+  AKTIF
+  NON_AKTIF
+  KELUAR
+}
+
+model Nasabah {
+  id            String        @id @default(cuid())
+  nomorAnggota  String        @unique
+  namaLengkap   String
+  nik           String        @unique
+  tempatLahir   String?
+  tanggalLahir  DateTime?
+  alamat        String
+  kelurahan     String?
+  kecamatan     String?
+  kotaKab       String?
+  noHp          String
+  pekerjaan     String?
+  namaUsaha     String?
+  status        StatusNasabah @default(AKTIF)
+  tanggalGabung DateTime      @default(now())
+  fotoUrl       String?
+  dokumenUrls   String[]
+
+  kolektorId    String?
+  kolektor      User?         @relation("KolektorNasabah", fields: [kolektorId], references: [id])
+  kelompokId    String?
+  kelompok      Kelompok?     @relation(fields: [kelompokId], references: [id])
+
+  penjamin      Penjamin[]
+  pengajuan     Pengajuan[]
+  simpanan      Simpanan[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("nasabah")
+}
+
+model Penjamin {
+  id          String  @id @default(cuid())
+  namaLengkap String
+  nik         String
+  hubungan    String
+  noHp        String
+  alamat      String?
+  nasabahId   String
+  nasabah     Nasabah @relation(fields: [nasabahId], references: [id], onDelete: Cascade)
+
+  @@map("penjamin")
+}
+
+model Kelompok {
+  id              String      @id @default(cuid())
+  kode            String      @unique
+  nama            String
+  ketua           String?
+  wilayah         String?
+  jadwalPertemuan String?
+
+  nasabah         Nasabah[]
+  pengajuan       Pengajuan[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("kelompok")
+}
+
+// ========================
+// PINJAMAN WORKFLOW
+// ========================
+
+enum JenisPinjaman {
+  REGULAR
+  MIKRO
+  USAHA
+}
+
+enum StatusPengajuan {
+  DRAFT
+  DIAJUKAN
+  DISURVEY
+  DISETUJUI
+  DITOLAK
+  DICAIRKAN
+  SELESAI
+}
+
+model Pengajuan {
+  id              String          @id @default(cuid())
+  nomorPengajuan  String          @unique @default(cuid())
+  nasabahId       String
+  nasabah         Nasabah         @relation(fields: [nasabahId], references: [id])
+  kelompokId      String?
+  kelompok        Kelompok?       @relation(fields: [kelompokId], references: [id])
+  jenisPinjaman   JenisPinjaman   @default(REGULAR)
+  plafonDiajukan  Decimal         @db.Decimal(15, 2)
+  plafonDisetujui Decimal?        @db.Decimal(15, 2)
+  tenor           Int
+  bungaPerBulan   Decimal         @db.Decimal(5, 4)
+  tujuanPinjaman  String?
+  agunan          String?
+  hasilSurvey     String?
+  catatanApproval String?
+  status          StatusPengajuan @default(DRAFT)
+
+  tanggalPengajuan DateTime @default(now())
+  tanggalSurvey    DateTime?
+  tanggalApproval  DateTime?
+
+  surveyorId String?
+  surveyor   User?   @relation("SurveyorPengajuan", fields: [surveyorId], references: [id])
+  approverId String?
+  approver   User?   @relation("ApproverPengajuan", fields: [approverId], references: [id])
+
+  pinjaman Pinjaman?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pengajuan")
+}
+
+enum StatusPinjaman {
+  AKTIF
+  MENUNGGAK
+  MACET
+  LUNAS
+}
+
+model Pinjaman {
+  id              String         @id @default(cuid())
+  nomorKontrak    String         @unique
+  pengajuanId     String         @unique
+  pengajuan       Pengajuan      @relation(fields: [pengajuanId], references: [id])
+  pokokPinjaman   Decimal        @db.Decimal(15, 2)
+  tenor           Int
+  bungaPerBulan   Decimal        @db.Decimal(5, 4)
+  angsuranPokok   Decimal        @db.Decimal(15, 2)
+  angsuranBunga   Decimal        @db.Decimal(15, 2)
+  totalAngsuran   Decimal        @db.Decimal(15, 2)
+  potonganAdmin   Decimal        @db.Decimal(15, 2) @default(0)
+  potonganProvisi Decimal        @db.Decimal(15, 2) @default(0)
+  nilaiCair       Decimal        @db.Decimal(15, 2)
+  tanggalCair     DateTime
+  tanggalJatuhTempo DateTime
+  sisaPinjaman    Decimal        @db.Decimal(15, 2)
+  status          StatusPinjaman @default(AKTIF)
+
+  jadwalAngsuran JadwalAngsuran[]
+  pembayaran     Pembayaran[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pinjaman")
+}
+
+model JadwalAngsuran {
+  id                String   @id @default(cuid())
+  pinjamanId        String
+  pinjaman          Pinjaman @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+  angsuranKe        Int
+  tanggalJatuhTempo DateTime
+  pokok             Decimal  @db.Decimal(15, 2)
+  bunga             Decimal  @db.Decimal(15, 2)
+  total             Decimal  @db.Decimal(15, 2)
+  sudahDibayar      Boolean  @default(false)
+  tanggalBayar      DateTime?
+  dendaHarian       Decimal  @db.Decimal(15, 2) @default(0)
+
+  @@map("jadwal_angsuran")
+}
+
+// ========================
+// PEMBAYARAN
+// ========================
+
+enum MetodeBayar {
+  TUNAI
+  TRANSFER
+}
+
+model Pembayaran {
+  id             String      @id @default(cuid())
+  nomorTransaksi String      @unique @default(cuid())
+  pinjamanId     String
+  pinjaman       Pinjaman    @relation(fields: [pinjamanId], references: [id])
+  tanggalBayar   DateTime    @default(now())
+  pokok          Decimal     @db.Decimal(15, 2)
+  bunga          Decimal     @db.Decimal(15, 2)
+  denda          Decimal     @db.Decimal(15, 2) @default(0)
+  totalBayar     Decimal     @db.Decimal(15, 2)
+  metode         MetodeBayar @default(TUNAI)
+  catatan        String?
+  inputOlehId    String
+  inputOleh      User        @relation(fields: [inputOlehId], references: [id])
+  isBatalkan     Boolean     @default(false)
+  alasanBatal    String?
+
+  createdAt DateTime @default(now())
+
+  @@map("pembayaran")
+}
+
+// ========================
+// SIMPANAN
+// ========================
+
+model Simpanan {
+  id        String  @id @default(cuid())
+  nasabahId String
+  nasabah   Nasabah @relation(fields: [nasabahId], references: [id])
+  jenis     String  // "WAJIB" | "SUKARELA" | "POKOK"
+  jumlah    Decimal @db.Decimal(15, 2)
+  tanggal   DateTime @default(now())
+
+  @@map("simpanan")
+}
+
+// ========================
+// ARUS KAS
+// ========================
+
+enum JenisKas {
+  MASUK
+  KELUAR
+}
+
+model KasTransaksi {
+  id          String   @id @default(cuid())
+  tanggal     DateTime @default(now())
+  jenis       JenisKas
+  kategori    String   // "PENCAIRAN", "ANGSURAN", "OPERASIONAL", "GAJI", dll
+  deskripsi   String
+  jumlah      Decimal  @db.Decimal(15, 2)
+  kasJenis    String   @default("TUNAI") // "TUNAI" | "BANK"
+  buktiUrl    String?
+  inputOlehId String
+  inputOleh   User     @relation(fields: [inputOlehId], references: [id])
+  isApproved  Boolean  @default(true)
+  referensiId String?  // opsional: link ke Pembayaran/Pinjaman ID
+
+  createdAt DateTime @default(now())
+
+  @@map("kas_transaksi")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  DISBURSE
+  PAYMENT
+  CASH
+  LOGIN
+  LOGOUT
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  actor      User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  entityType String
+  entityId   String?
+  action     AuditAction
+  beforeData Json?
+  afterData  Json?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+enum ApprovalEntityType {
+  PENGAJUAN
+  PEMBAYARAN
+  KAS
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ApprovalLog {
+  id            String             @id @default(cuid())
+  entityType    ApprovalEntityType
+  entityId      String
+  status        ApprovalStatus     @default(PENDING)
+  catatan       String?
+  requestedById String
+  requestedBy   User               @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  approvedById  String?
+  approvedBy    User?              @relation("ApprovalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([requestedById, createdAt])
+  @@map("approval_logs")
+}
+
+model KolektorTarget {
+  id                String   @id @default(cuid())
+  kolektorId        String
+  kolektor          User     @relation("KolektorTargetUser", fields: [kolektorId], references: [id], onDelete: Cascade)
+  periodMonth       Int
+  periodYear        Int
+  targetTagihan     Decimal  @db.Decimal(15, 2)
+  realisasiTagihan  Decimal  @db.Decimal(15, 2) @default(0)
+  targetKunjungan   Int      @default(0)
+  realisasiKunjungan Int     @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([kolektorId, periodMonth, periodYear])
+  @@index([periodYear, periodMonth])
+  @@map("kolektor_targets")
+}
+
+enum NotifikasiJenis {
+  JATUH_TEMPO
+  TUNGGAKAN
+  APPROVAL
+  KAS
+  REMINDER
+  SYSTEM
+}
+
+model Notifikasi {
+  id        String         @id @default(cuid())
+  userId    String?
+  user      User?          @relation("UserNotifikasi", fields: [userId], references: [id], onDelete: SetNull)
+  jenis     NotifikasiJenis
+  judul     String
+  pesan     String
+  link      String?
+  isRead    Boolean        @default(false)
+  readAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifikasi")
+}

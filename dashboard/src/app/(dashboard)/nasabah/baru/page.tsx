@@ -1,0 +1,178 @@
+"use client"
+
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { nasabahSchema, type NasabahInput } from "@/lib/validations/nasabah"
+import { createNasabah } from "@/actions/nasabah"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
+import { ArrowLeft, ArrowRight, Save, User, MapPin } from "lucide-react"
+import Link from "next/link"
+
+const STEPS = ["Data Diri", "Data Kontak & Usaha"]
+
+export default function NasabahBaruPage() {
+  const [step, setStep] = useState(0)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { errors },
+  } = useForm<NasabahInput>({
+    resolver: zodResolver(nasabahSchema) as never,
+    defaultValues: { status: "AKTIF" },
+  })
+
+  const handleNext = async () => {
+    const fields: (keyof NasabahInput)[] = step === 0
+      ? ["namaLengkap", "nik", "alamat"]
+      : ["noHp"]
+    const valid = await trigger(fields)
+    if (valid) setStep((s) => s + 1)
+  }
+
+  const onSubmit = (data: NasabahInput) => {
+    startTransition(async () => {
+      const result = await createNasabah(data)
+      if (result.error) {
+        toast.error("Gagal menyimpan data nasabah. Periksa kembali form.")
+        return
+      }
+      toast.success(`Nasabah berhasil ditambahkan!`)
+      router.push("/nasabah")
+    })
+  }
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto space-y-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href="/nasabah"><ArrowLeft className="size-4" /></Link>
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Tambah Nasabah Baru</h1>
+          <p className="text-muted-foreground text-sm">Langkah {step + 1} dari {STEPS.length}: {STEPS[step]}</p>
+        </div>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex gap-2">
+        {STEPS.map((s, i) => (
+          <div key={s} className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-emerald-500" : "bg-muted"}`} />
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        {step === 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><User className="size-4" /> Data Diri</CardTitle>
+              <CardDescription>Informasi identitas nasabah</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="namaLengkap">Nama Lengkap <span className="text-red-500">*</span></Label>
+                <Input id="namaLengkap" {...register("namaLengkap")} placeholder="Sesuai KTP" />
+                {errors.namaLengkap && <p className="text-xs text-red-500">{errors.namaLengkap.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nik">NIK (16 digit) <span className="text-red-500">*</span></Label>
+                <Input id="nik" {...register("nik")} placeholder="Nomor KTP" maxLength={16} />
+                {errors.nik && <p className="text-xs text-red-500">{errors.nik.message}</p>}
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tempatLahir">Tempat Lahir</Label>
+                  <Input id="tempatLahir" {...register("tempatLahir")} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tanggalLahir">Tanggal Lahir</Label>
+                  <Input id="tanggalLahir" type="date" {...register("tanggalLahir")} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="alamat">Alamat Lengkap <span className="text-red-500">*</span></Label>
+                <Textarea id="alamat" {...register("alamat")} placeholder="Jalan, RT/RW, Desa..." rows={3} />
+                {errors.alamat && <p className="text-xs text-red-500">{errors.alamat.message}</p>}
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {[
+                  { id: "kelurahan", label: "Kelurahan/Desa" },
+                  { id: "kecamatan", label: "Kecamatan" },
+                  { id: "kotaKab", label: "Kota/Kab" },
+                ].map(({ id, label }) => (
+                  <div key={id} className="space-y-2">
+                    <Label htmlFor={id}>{label}</Label>
+                    <Input id={id} {...register(id as keyof NasabahInput)} />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><MapPin className="size-4" /> Kontak & Usaha</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="noHp">No. HP Aktif <span className="text-red-500">*</span></Label>
+                <Input id="noHp" {...register("noHp")} placeholder="08xxxxxxxxxx" />
+                {errors.noHp && <p className="text-xs text-red-500">{errors.noHp.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pekerjaan">Pekerjaan</Label>
+                <Input id="pekerjaan" {...register("pekerjaan")} placeholder="Wiraswasta, Pedagang, dll..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="namaUsaha">Nama Usaha</Label>
+                <Input id="namaUsaha" {...register("namaUsaha")} placeholder="Jika ada..." />
+              </div>
+              <div className="space-y-2">
+                <Label>Status Nasabah</Label>
+                <Select defaultValue="AKTIF" onValueChange={(v) => setValue("status", v as NasabahInput["status"])}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AKTIF">Aktif</SelectItem>
+                    <SelectItem value="NON_AKTIF">Non Aktif</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex justify-between pt-4">
+          {step > 0 ? (
+            <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)}>
+              <ArrowLeft className="size-4" /> Sebelumnya
+            </Button>
+          ) : <div />}
+
+          {step < STEPS.length - 1 ? (
+            <Button type="button" onClick={handleNext} className="bg-emerald-600 hover:bg-emerald-700">
+              Berikutnya <ArrowRight className="size-4" />
+            </Button>
+          ) : (
+            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isPending}>
+              <Save className="size-4" /> {isPending ? "Menyimpan..." : "Simpan Nasabah"}
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  )
+}
