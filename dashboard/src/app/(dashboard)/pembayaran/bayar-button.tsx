@@ -34,6 +34,7 @@ async function uploadBuktiPembayaran(file: File) {
 
 export function BayarButton({ jadwalId, total }: { jadwalId: string; total: number }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [isUploading, setIsUploading] = useState(false)
   const router = useRouter()
@@ -44,6 +45,10 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
   const [tanggalBayar, setTanggalBayar] = useState("")
   const [buktiBayarUrl, setBuktiBayarUrl] = useState("")
   const [buktiFileName, setBuktiFileName] = useState("")
+  const [savedPembayaranId, setSavedPembayaranId] = useState<string | null>(null)
+  const [savedNominal, setSavedNominal] = useState<number>(0)
+  const [savedDenda, setSavedDenda] = useState<number>(0)
+  const [savedMode, setSavedMode] = useState<"FULL" | "PARSIAL" | "PELUNASAN">("FULL")
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,7 +75,12 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
         }
         const dendaInfo = result.denda > 0 ? ` (termasuk denda ${fmt(result.denda)})` : ""
         toast.success(`Pembayaran berhasil dicatat${dendaInfo}.`)
+        setSavedPembayaranId(result.pembayaranId)
+        setSavedNominal(result.totalBayar)
+        setSavedDenda(result.denda)
+        setSavedMode(result.mode)
         setIsOpen(false)
+        setIsSuccessOpen(true)
         router.refresh()
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Gagal memproses pembayaran.")
@@ -107,15 +117,15 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
       </div>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Proses Pembayaran</DialogTitle>
-            <DialogDescription>
-              Total tagihan angsuran saat ini: <strong className="text-slate-900">{fmt(total)}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
+        <DialogContent className="sm:max-w-[425px] border-slate-200 bg-blue-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Proses Pembayaran</DialogTitle>
+              <DialogDescription>
+                Total tagihan angsuran saat ini: <strong className="text-slate-900">{fmt(total)}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Tipe Pembayaran</Label>
                 <select
@@ -213,6 +223,49 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
         </form>
       </DialogContent>
     </Dialog>
+      <Dialog open={isSuccessOpen} onOpenChange={setIsSuccessOpen}>
+        <DialogContent className="sm:max-w-[460px] border-emerald-200 bg-emerald-50 shadow-2xl dark:border-emerald-900 dark:bg-emerald-950/40">
+          <DialogHeader>
+            <DialogTitle>Pembayaran tersimpan</DialogTitle>
+            <DialogDescription>
+              Dokumen kuitansi siap dicetak. Total pembayaran {fmt(savedNominal)}
+              {savedDenda > 0 ? `, termasuk denda ${fmt(savedDenda)}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border border-emerald-200 bg-white/80 p-4 text-sm text-slate-700 shadow-sm dark:border-emerald-900 dark:bg-slate-950/60 dark:text-slate-200">
+            <div className="flex items-center justify-between gap-4">
+              <span className="font-medium">Mode pembayaran</span>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                {savedMode}
+              </span>
+            </div>
+            <div className="mt-3 text-xs text-slate-500 break-all">
+              ID pembayaran: {savedPembayaranId ?? "-"}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSuccessOpen(false)}
+            >
+              Tutup
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => {
+                if (!savedPembayaranId) return
+                window.open(`/dokumen/kuitansi/${savedPembayaranId}`, "_blank", "noopener,noreferrer")
+              }}
+            >
+              Cetak Kuitansi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
