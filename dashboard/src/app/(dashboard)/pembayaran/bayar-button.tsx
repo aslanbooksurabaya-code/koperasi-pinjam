@@ -50,6 +50,13 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
   const [savedDenda, setSavedDenda] = useState<number>(0)
   const [savedMode, setSavedMode] = useState<"FULL" | "PARSIAL" | "PELUNASAN">("FULL")
 
+  const handleSuccessOpenChange = (open: boolean) => {
+    setIsSuccessOpen(open)
+    if (!open) {
+      router.refresh()
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -81,7 +88,6 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
         setSavedMode(result.mode)
         setIsOpen(false)
         setIsSuccessOpen(true)
-        router.refresh()
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Gagal memproses pembayaran.")
       }
@@ -223,7 +229,7 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
         </form>
       </DialogContent>
     </Dialog>
-      <Dialog open={isSuccessOpen} onOpenChange={setIsSuccessOpen}>
+      <Dialog open={isSuccessOpen} onOpenChange={handleSuccessOpenChange}>
         <DialogContent className="sm:max-w-[460px] border-emerald-200 bg-emerald-50 shadow-2xl dark:border-emerald-900 dark:bg-emerald-950/40">
           <DialogHeader>
             <DialogTitle>Pembayaran tersimpan</DialogTitle>
@@ -249,7 +255,7 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsSuccessOpen(false)}
+              onClick={() => handleSuccessOpenChange(false)}
             >
               Tutup
             </Button>
@@ -259,6 +265,7 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
               onClick={() => {
                 if (!savedPembayaranId) return
                 window.open(`/dokumen/kuitansi/${savedPembayaranId}`, "_blank", "noopener,noreferrer")
+                handleSuccessOpenChange(false)
               }}
             >
               Cetak Kuitansi
