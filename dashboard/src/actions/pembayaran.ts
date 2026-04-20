@@ -342,7 +342,8 @@ export async function inputPembayaran(input: {
     return { error: "Tidak memiliki hak akses untuk input pembayaran." }
   }
 
-  const jadwal = await prisma.jadwalAngsuran.findUnique({
+  try {
+    const jadwal = await prisma.jadwalAngsuran.findUnique({
     where: { id: input.jadwalAngsuranId },
     include: {
       pinjaman: true,
@@ -503,6 +504,11 @@ export async function inputPembayaran(input: {
   })
 
   return { success: true, ...result }
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Gagal memproses pembayaran.",
+    }
+  }
 }
 
 export async function getRiwayatPembayaran(pinjamanId: string) {

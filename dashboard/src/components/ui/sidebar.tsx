@@ -138,7 +138,7 @@ function SidebarProvider({
           } as React.CSSProperties
         }
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
+          "group/sidebar-wrapper flex min-h-svh w-full bg-slate-50 has-data-[variant=inset]:bg-slate-50 dark:bg-slate-950",
           className
         )}
         {...props}
@@ -151,24 +151,25 @@ function SidebarProvider({
 
 function Sidebar({
   side = "left",
+  variant = "sidebar",
   collapsible = "offcanvas",
   className,
   children,
   dir,
   ...props
 }: React.ComponentProps<"div"> & {
-  side?: "left" | "right"
+  side?: "left" | "right" | "top" | "bottom"
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, openMobile, setOpenMobile, state } = useSidebar()
 
   if (collapsible === "none") {
     return (
       <div
         data-slot="sidebar"
         className={cn(
-          "flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
+          "flex h-full w-(--sidebar-width) flex-col bg-slate-50 text-sidebar-foreground dark:bg-slate-950",
           className
         )}
         {...props}
@@ -186,7 +187,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className="w-(--sidebar-width) bg-slate-50 p-0 text-sidebar-foreground dark:bg-slate-950 [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -204,7 +205,51 @@ function Sidebar({
     )
   }
 
-  return null
+  return (
+    <div
+      className="group peer hidden md:block"
+      data-state={state}
+      data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-variant={variant}
+      data-side={side}
+      data-slot="sidebar"
+    >
+      {/* This is what handles the sidebar width on desktop */}
+      <div
+        className={cn(
+          "relative h-svh w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          "group-data-[collapsible=offcanvas]:w-0",
+          "group-data-[side=right]:rotate-180",
+          "group-data-[state=collapsed]:w-(--sidebar-width-icon)"
+        )}
+      />
+      <div
+        className={cn(
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) bg-slate-50 text-sidebar-foreground transition-[left,right,width] duration-200 ease-linear dark:bg-slate-950 md:flex",
+          side === "left"
+            ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
+            : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
+          // Adjust the padding for floating variant
+          "group-data-[variant=floating]:inset-y-2",
+          "group-data-[variant=floating]:w-[calc(var(--sidebar-width)-0.8rem)]",
+          "group-data-[variant=floating]:rounded-xl",
+          "group-data-[variant=floating]:border",
+          "group-data-[variant=floating]:border-sidebar-border",
+          "group-data-[variant=floating]:shadow-sm",
+          "group-data-[state=collapsed]:w-(--sidebar-width-icon)",
+          className
+        )}
+        {...props}
+      >
+        <div
+          data-sidebar="sidebar"
+          className="flex h-full w-full flex-col bg-slate-50 group-data-[variant=floating]:rounded-xl dark:bg-slate-950"
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function SidebarTrigger({
@@ -560,10 +605,14 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const [width] = React.useState(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  })
+  const reactId = React.useId()
+  const width = React.useMemo(() => {
+    let hash = 0
+    for (let i = 0; i < reactId.length; i++) {
+      hash = (hash * 31 + reactId.charCodeAt(i)) >>> 0
+    }
+    return `${50 + (hash % 41)}%`
+  }, [reactId])
 
   return (
     <div

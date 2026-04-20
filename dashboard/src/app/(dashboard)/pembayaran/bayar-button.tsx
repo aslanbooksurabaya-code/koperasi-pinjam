@@ -7,23 +7,43 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Wallet } from "lucide-react"
+import { Wallet, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
 }
 
+function getLocalDateInputValue(date: Date) {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
+async function uploadBuktiPembayaran(file: File) {
+  const formData = new FormData()
+  formData.append("files", file)
+  const res = await fetch("/api/upload/pembayaran", { method: "POST", body: formData })
+  const json = (await res.json()) as { urls?: string[]; error?: string }
+  if (!res.ok || !json.urls?.length) {
+    throw new Error(json.error ?? "Upload bukti gagal.")
+  }
+  return json.urls[0]
+}
+
 export function BayarButton({ jadwalId, total }: { jadwalId: string; total: number }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [isUploading, setIsUploading] = useState(false)
   const router = useRouter()
 
   const [mode, setMode] = useState<"FULL" | "PARSIAL" | "PELUNASAN">("FULL")
   const [metode, setMetode] = useState<"TUNAI" | "TRANSFER">("TUNAI")
   const [jumlahBayar, setJumlahBayar] = useState(total.toString())
-  const [tanggalBayar, setTanggalBayar] = useState(new Date().toISOString().split("T")[0])
+  const [tanggalBayar, setTanggalBayar] = useState("")
   const [buktiBayarUrl, setBuktiBayarUrl] = useState("")
+  const [buktiFileName, setBuktiFileName] = useState("")
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,29 +55,52 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
     }
 
     startTransition(async () => {
-      const result = await inputPembayaran({
-        jadwalAngsuranId: jadwalId,
-        mode,
-        jumlahBayar: mode === "PARSIAL" ? jumlah : undefined,
-        metode,
-        buktiBayarUrl: buktiBayarUrl.trim() || undefined,
-        tanggalBayar: tanggalBayar || undefined,
-      })
-      if (!("success" in result) || !result.success) {
-        toast.error("error" in result ? result.error : "Gagal memproses pembayaran.")
-        return
+      try {
+        const result = await inputPembayaran({
+          jadwalAngsuranId: jadwalId,
+          mode,
+          jumlahBayar: mode === "PARSIAL" ? jumlah : undefined,
+          metode,
+          buktiBayarUrl: buktiBayarUrl.trim() || undefined,
+          tanggalBayar: tanggalBayar || undefined,
+        })
+        if (!("success" in result) || !result.success) {
+          toast.error("error" in result ? result.error : "Gagal memproses pembayaran.")
+          return
+        }
+        const dendaInfo = result.denda > 0 ? ` (termasuk denda ${fmt(result.denda)})` : ""
+        toast.success(`Pembayaran berhasil dicatat${dendaInfo}.`)
+        setIsOpen(false)
+        router.refresh()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Gagal memproses pembayaran.")
       }
-      const dendaInfo = result.denda > 0 ? ` (termasuk denda ${fmt(result.denda)})` : ""
-      toast.success(`Pembayaran berhasil dicatat${dendaInfo}.`)
-      setIsOpen(false)
-      router.refresh()
     })
+  }
+
+  const handleUpload = async (file: File | null) => {
+    if (!file) return
+    setIsUploading(true)
+    try {
+      const url = await uploadBuktiPembayaran(file)
+      setBuktiBayarUrl(url)
+      setBuktiFileName(file.name)
+      toast.success("Bukti pembayaran berhasil diupload.")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload bukti gagal.")
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   return (
     <>
       <div className="flex items-center gap-1">
-        <Button size="sm" onClick={() => setIsOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs gap-1">
+        <Button size="sm" variant="default" onClick={() => {
+          if (!tanggalBayar) setTanggalBayar(getLocalDateInputValue(new Date()))
+          setIsOpen(true)
+        }} className="h-7 gap-1 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 hover:text-white active:bg-emerald-800">
+
           <Wallet className="size-3" />
           Bayar
         </Button>
@@ -129,21 +172,41 @@ export function BayarButton({ jadwalId, total }: { jadwalId: string; total: numb
             </div>
 
             <div className="space-y-2">
-              <Label>Bukti Transfer / Dokumen (Opsional URL)</Label>
+              <Label>Bukti Transfer / Dokumen</Label>
               <Input
-                type="text"
-                placeholder="https://..."
-                value={buktiBayarUrl}
-                onChange={(e) => setBuktiBayarUrl(e.target.value)}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                disabled={isUploading || isPending}
+                onChange={(e) => {
+                  void handleUpload(e.target.files?.item(0) ?? null)
+                  e.currentTarget.value = ""
+                }}
               />
-              <p className="text-[10px] text-muted-foreground">Catatan: Fitur upload file fisik menyusul. Sementara gunakan tautan/URL (Cloudflare R2 dll).</p>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Upload className="size-3" /> {isUploading ? "Sedang upload..." : "Upload file bukti pembayaran (max 5MB)."}
+              </p>
+              {buktiBayarUrl ? (
+                <div className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+                  <span className="truncate">{buktiFileName || buktiBayarUrl.split("/").pop() || buktiBayarUrl}</span>
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    onClick={() => {
+                      setBuktiBayarUrl("")
+                      setBuktiFileName("")
+                    }}
+                  >
+                    <X className="size-3" /> Hapus
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Batal
             </Button>
-            <Button type="submit" disabled={isPending} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button type="submit" disabled={isPending || isUploading} className="bg-emerald-600 hover:bg-emerald-700">
               {isPending ? "Menyimpan..." : "Simpan Pembayaran"}
             </Button>
           </DialogFooter>
