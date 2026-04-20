@@ -7,6 +7,7 @@ import { z } from "zod"
 import { ApprovalEntityType, ApprovalStatus, Prisma, RoleType } from "@prisma/client"
 import { hasAnyRole, requireRoles } from "@/lib/roles"
 import { writeAuditLog } from "@/lib/audit"
+import { serializeData } from "@/lib/utils"
 
 function normalizeKasCategoryKey(raw: string) {
   return raw.trim().toUpperCase().replace(/\s+/g, "_")
@@ -27,7 +28,7 @@ const kasSchema = z.object({
   tanggal: z.string().optional(),
 })
 
-async function ensureKasKategori(params: { jenis: "MASUK" | "KELUAR"; kategori: string }) {
+export async function ensureKasKategori(params: { jenis: "MASUK" | "KELUAR"; kategori: string }) {
   const key = normalizeKasCategoryKey(params.kategori)
   if (!key) return { error: "Kategori tidak boleh kosong." as const }
 
@@ -54,30 +55,48 @@ export async function getKasKategoriList() {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
 
-  const existingCount = await prisma.kasKategori.count()
-  if (existingCount === 0) {
-    const defaults: Array<{ jenis: "MASUK" | "KELUAR"; nama: string }> = [
-      { jenis: "MASUK", nama: "ANGSURAN" },
-      { jenis: "MASUK", nama: "SIMPANAN" },
-      { jenis: "MASUK", nama: "ADMIN" },
-      { jenis: "MASUK", nama: "DENDA" },
-      { jenis: "MASUK", nama: "LAINNYA_MASUK" },
-      { jenis: "KELUAR", nama: "PENCAIRAN" },
-      { jenis: "KELUAR", nama: "GAJI" },
-      { jenis: "KELUAR", nama: "OPERASIONAL" },
-      { jenis: "KELUAR", nama: "LAINNYA_KELUAR" },
-    ]
+  const defaults: Array<{ jenis: "MASUK" | "KELUAR"; nama: string }> = [
+    { jenis: "MASUK", nama: "ANGSURAN" },
+    { jenis: "MASUK", nama: "PELUNASAN" },
+    { jenis: "MASUK", nama: "SIMPANAN" },
+    { jenis: "MASUK", nama: "ADMIN" },
+    { jenis: "MASUK", nama: "DENDA" },
+    { jenis: "MASUK", nama: "LAINNYA" },
+    { jenis: "MASUK", nama: "LAINNYA_MASUK" },
+    { jenis: "KELUAR", nama: "PENCAIRAN" },
+    { jenis: "KELUAR", nama: "PEMBATALAN_ANGSURAN" },
+    { jenis: "KELUAR", nama: "GAJI" },
+    { jenis: "KELUAR", nama: "OPERASIONAL" },
+    { jenis: "KELUAR", nama: "TUNJANGAN HARI RAYA DAN PARCEL" },
+    { jenis: "KELUAR", nama: "ALAT TULIS KANTOR" },
+    { jenis: "KELUAR", nama: "LISTRIK DAN PDAM" },
+    { jenis: "KELUAR", nama: "INTERNET, PULSA DAN TELEPON" },
+    { jenis: "KELUAR", nama: "BIAYA PROMOSI" },
+    { jenis: "KELUAR", nama: "MAKANAN DAN MINUMAN" },
+    { jenis: "KELUAR", nama: "PAJAK USAHA" },
+    { jenis: "KELUAR", nama: "SEWA TEMPAT" },
+    { jenis: "KELUAR", nama: "BIAYA PERAWATAN PERALATAN" },
+    { jenis: "KELUAR", nama: "CADANGAN" },
+    { jenis: "KELUAR", nama: "LAINNYA_KELUAR" },
+  ]
 
-    await Promise.all(
-      defaults.map(async (d) => {
-        const key = normalizeKasCategoryKey(d.nama)
-        const found = await prisma.kasKategori.findUnique({ where: { key } })
-        if (found) return
-        await prisma.kasKategori.create({
-          data: { nama: d.nama, key, jenis: d.jenis, isActive: true },
-        })
+  // Sequential seeding with upsert to avoid race conditions and duplicates
+  for (const d of defaults) {
+    const key = normalizeKasCategoryKey(d.nama)
+    try {
+      await prisma.kasKategori.upsert({
+        where: { key },
+        update: {},
+        create: {
+          nama: d.nama,
+          key,
+          jenis: d.jenis,
+          isActive: true,
+        },
       })
-    )
+    } catch (err) {
+      console.error(`Error seeding category ${d.nama}:`, err)
+    }
   }
 
   const rows = await prisma.kasKategori.findMany({
@@ -130,6 +149,107 @@ export async function createKasKategori(input: unknown) {
   return { success: true, data: row }
 }
 
+export async function updateKasKategori(id: string, input: unknown) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+  let userId: string
+  try {
+    const required = requireRoles(session, [RoleType.ADMIN, RoleType.MANAGER, RoleType.PIMPINAN])
+    userId = required.userId
+  } catch {
+    return { error: "Tidak memiliki hak akses untuk mengubah kategori kas." }
+  }
+
+  const parsed = kasKategoriSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+
+  const existing = await prisma.kasKategori.findUnique({ where: { id } })
+  if (!existing) return { error: "Kategori tidak ditemukan." }
+
+  const newKey = normalizeKasCategoryKey(parsed.data.nama)
+  
+  if (newKey !== existing.key) {
+    const collision = await prisma.kasKategori.findFirst({
+      where: { key: newKey, id: { not: id } }
+    })
+    if (collision) {
+      return { error: `Kategori dengan nama "${parsed.data.nama}" sudah ada.` }
+    }
+  }
+
+  const row = await prisma.$transaction(async (tx) => {
+    // If key changes, we need to update all transactions that use the old key
+    if (newKey !== existing.key) {
+      await tx.kasTransaksi.updateMany({
+        where: { kategori: existing.key },
+        data: { kategori: newKey }
+      })
+    }
+
+    return await tx.kasKategori.update({
+      where: { id },
+      data: {
+        nama: parsed.data.nama.trim(),
+        key: newKey,
+        jenis: parsed.data.jenis,
+      },
+    })
+  })
+
+  revalidatePath("/kas")
+  await writeAuditLog({
+    actorId: userId,
+    entityType: "KAS_KATEGORI",
+    entityId: row.id,
+    action: "UPDATE",
+    beforeData: { key: existing.key, nama: existing.nama, jenis: existing.jenis },
+    afterData: { key: row.key, nama: row.nama, jenis: row.jenis },
+  })
+  return { success: true, data: row }
+}
+
+export async function deleteKasKategori(id: string) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+  let userId: string
+  try {
+    const required = requireRoles(session, [RoleType.ADMIN, RoleType.MANAGER, RoleType.PIMPINAN])
+    userId = required.userId
+  } catch {
+    return { error: "Tidak memiliki hak akses untuk menghapus kategori kas." }
+  }
+
+  const existing = await prisma.kasKategori.findUnique({
+    where: { id },
+  })
+  if (!existing) return { error: "Kategori tidak ditemukan." }
+
+  const transaksiCount = await prisma.kasTransaksi.count({
+    where: { kategori: existing.key },
+  })
+
+  if (transaksiCount > 0) {
+    // Soft delete if there are transactions
+    await prisma.kasKategori.update({
+      where: { id },
+      data: { isActive: false },
+    })
+  } else {
+    // Hard delete if no transactions
+    await prisma.kasKategori.delete({ where: { id } })
+  }
+
+  revalidatePath("/kas")
+  await writeAuditLog({
+    actorId: userId,
+    entityType: "KAS_KATEGORI",
+    entityId: id,
+    action: "DELETE",
+    beforeData: { key: existing.key, nama: existing.nama, jenis: existing.jenis },
+  })
+  return { success: true }
+}
+
 export async function getKasHarian(tanggal?: string) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
@@ -143,6 +263,7 @@ export async function getKasHarian(tanggal?: string) {
       where: { tanggal: { gte: startOfDay, lt: endOfDay } },
       orderBy: { tanggal: "desc" },
       include: { inputOleh: { select: { name: true } } },
+      take: 500,
     }),
     prisma.kasTransaksi.aggregate({
       where: { tanggal: { lt: startOfDay } },
@@ -152,16 +273,105 @@ export async function getKasHarian(tanggal?: string) {
     }),
   ])
 
-  const totalMasuk = transaksi.filter((t) => t.jenis === "MASUK").reduce((a, b) => a + Number(b.jumlah), 0)
-  const totalKeluar = transaksi.filter((t) => t.jenis === "KELUAR").reduce((a, b) => a + Number(b.jumlah), 0)
+  const totalMasuk = transaksi.filter((t) => t.jenis === "MASUK").reduce((a, b) => a + Number(b.jumlah ?? 0), 0)
+  const totalKeluar = transaksi.filter((t) => t.jenis === "KELUAR").reduce((a, b) => a + Number(b.jumlah ?? 0), 0)
   const pendingApprovalCount = transaksi.filter((t) => t.isApproved === false).length
 
-  return {
+  return serializeData({
     transaksi,
     totalMasuk,
     totalKeluar,
     pendingApprovalCount,
-    saldoAwal: Number(saldoAwal._sum.jumlah ?? 0),
+    saldoAwal: Number(saldoAwal?._sum?.jumlah ?? 0),
+  })
+}
+
+type ArusKasGroupBy = "WEEK" | "MONTH"
+
+function startOfISOWeek(date: Date) {
+  const d = new Date(date)
+  const day = (d.getDay() + 6) % 7 // monday=0
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - day)
+  return d
+}
+
+function formatMonthKey(date: Date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  return `${y}-${m}`
+}
+
+function formatWeekKey(date: Date) {
+  const start = startOfISOWeek(date)
+  const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000)
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+  return `${fmt(start)}–${fmt(end)}`
+}
+
+export async function getArusKasReport(params?: {
+  from?: string
+  to?: string
+  groupBy?: ArusKasGroupBy
+}) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  const groupBy: ArusKasGroupBy = params?.groupBy ?? "MONTH"
+
+  const today = new Date()
+  const to = params?.to ? new Date(params.to) : today
+  const from = params?.from
+    ? new Date(params.from)
+    : new Date(new Date(to).setMonth(to.getMonth() - 6))
+
+  // Normalize bounds
+  const fromDate = new Date(from)
+  fromDate.setHours(0, 0, 0, 0)
+  const toDate = new Date(to)
+  toDate.setHours(23, 59, 59, 999)
+
+  const rows = await prisma.kasTransaksi.findMany({
+    where: {
+      isApproved: true,
+      tanggal: { gte: fromDate, lte: toDate },
+    },
+    select: {
+      tanggal: true,
+      jenis: true,
+      jumlah: true,
+    },
+    orderBy: { tanggal: "asc" },
+    take: 50_000,
+  })
+
+  const map = new Map<
+    string,
+    { key: string; masuk: number; keluar: number; surplus: number }
+  >()
+
+  for (const r of rows) {
+    const key = groupBy === "WEEK" ? formatWeekKey(r.tanggal) : formatMonthKey(r.tanggal)
+    const prev = map.get(key) ?? { key, masuk: 0, keluar: 0, surplus: 0 }
+    const amount = Number(r.jumlah ?? 0)
+    if (r.jenis === "MASUK") prev.masuk += amount
+    else prev.keluar += amount
+    prev.surplus = prev.masuk - prev.keluar
+    map.set(key, prev)
+  }
+
+  const data = Array.from(map.values())
+  const totalMasuk = data.reduce((a, b) => a + b.masuk, 0)
+  const totalKeluar = data.reduce((a, b) => a + b.keluar, 0)
+  const totalSurplus = totalMasuk - totalKeluar
+
+  return {
+    from: fromDate,
+    to: toDate,
+    groupBy,
+    data,
+    totals: { masuk: totalMasuk, keluar: totalKeluar, surplus: totalSurplus },
   }
 }
 
@@ -326,7 +536,7 @@ export async function getKasPendingApprovals(params?: { limit?: number }) {
     include: { inputOleh: { select: { id: true, name: true } } },
   })
 
-  return { success: true as const, data: rows }
+  return serializeData({ success: true as const, data: rows })
 }
 
 export async function approveKasTransaksi(input: { id: string; action: "APPROVE" | "REJECT"; catatan?: string }) {
@@ -419,7 +629,12 @@ export async function getKasBulanan(bulan: number, tahun: number) {
     _count: { id: true },
   })
 
-  return data
+  return data.map(d => ({
+    ...d,
+    _sum: {
+      jumlah: Number(d._sum?.jumlah ?? 0)
+    }
+  }))
 }
 
 export async function getLabaRugiSummary(params?: { month?: string; year?: string }) {
