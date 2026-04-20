@@ -8,6 +8,12 @@ import { requireRoles } from "@/lib/roles"
 import { RoleType } from "@prisma/client"
 import { DEFAULT_RANKING_CONFIG, type RankingConfig } from "@/lib/ranking"
 import { DEFAULT_TIME_ZONE, normalizeTimeZone } from "@/lib/datetime"
+import {
+  ACCOUNTING_MODE_KEY,
+  DEFAULT_ACCOUNTING_MODE,
+  normalizeAccountingMode,
+  type AccountingMode,
+} from "@/lib/accounting-mode"
 
 const RANKING_KEY = "RANKING_CONFIG"
 const COMPANY_KEY = "COMPANY_INFO"
@@ -125,6 +131,41 @@ export async function updateRankingConfig(input: unknown) {
 
   revalidatePath("/settings")
   revalidatePath("/laporan/transaksi-per-user")
+  return { success: true }
+}
+
+const accountingModeSchema = z.enum(["SIMPLE", "PROPER"])
+
+export async function getAccountingMode(): Promise<AccountingMode> {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  const row = await prisma.appSetting.findUnique({ where: { key: ACCOUNTING_MODE_KEY } })
+  if (!row) return DEFAULT_ACCOUNTING_MODE
+
+  return normalizeAccountingMode(typeof row.value === "string" ? row.value : null)
+}
+
+export async function updateAccountingMode(input: unknown) {
+  const session = await auth()
+  if (!session) throw new Error("Unauthorized")
+
+  try {
+    requireRoles(session, [RoleType.ADMIN])
+  } catch {
+    return { error: "Hanya admin yang dapat mengubah mode akuntansi." }
+  }
+
+  const parsed = accountingModeSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+
+  await prisma.appSetting.upsert({
+    where: { key: ACCOUNTING_MODE_KEY },
+    create: { key: ACCOUNTING_MODE_KEY, value: parsed.data },
+    update: { value: parsed.data },
+  })
+
+  revalidatePath("/settings")
   return { success: true }
 }
 

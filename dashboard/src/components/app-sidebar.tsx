@@ -6,6 +6,7 @@ import {
   FileBarChart, AlertTriangle, Building2, Landmark,
   LifeBuoy, Send
 } from "lucide-react"
+import type { AccountingMode } from "@/lib/accounting-mode"
 
 import { AppLink } from "@/components/app-link"
 import { NavMain } from "@/components/nav-main"
@@ -21,84 +22,83 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const data = {
-  navMain: [
-    {
-      title: "Overview",
-      url: "/",
-      icon: <LayoutDashboard />,
-      isActive: true,
-      items: [
-        { title: "Dashboard", url: "/" },
-      ],
-    },
-    {
-      title: "Master Data",
-      url: "#",
-      icon: <Users />,
-      items: [
-        { title: "Nasabah (Daftar)", url: "/nasabah" },
-        { title: "Nasabah Baru", url: "/nasabah/baru" },
-        { title: "Kelompok", url: "/kelompok" },
-        { title: "Kolektor", url: "/kolektor" },
-      ],
-    },
-    {
-      title: "Transaksi",
-      url: "#",
-      icon: <FileText />,
-      items: [
-        { title: "Pengajuan Pinjaman", url: "/pengajuan" },
-        { title: "Pencairan", url: "/pencairan" },
-        { title: "Pembayaran Angsuran", url: "/pembayaran" },
-        { title: "Arus Kas", url: "/kas" },
-      ],
-    },
-    {
-      title: "Akuntansi",
-      url: "#",
-      icon: <Landmark />,
-      items: [
-        { title: "Daftar Akun (COA)", url: "/akuntansi/akun" },
-        { title: "Mapping Kategori", url: "/akuntansi/mapping-kategori" },
-      ],
-    },
-    {
-      title: "Monitoring",
-      url: "#",
-      icon: <AlertTriangle />,
-      items: [
-        { title: "Tunggakan", url: "/monitoring/tunggakan" },
-        { title: "Rekap Kolektor", url: "/monitoring/kolektor" },
-      ],
-    },
-    {
-      title: "Laporan",
-      url: "#",
-      icon: <FileBarChart />,
-      items: [
-        { title: "Transaksi User", url: "/laporan/transaksi-per-user" },
-        { title: "Buku Besar", url: "/laporan/buku-besar" },
-        { title: "Neraca", url: "/laporan/neraca" },
-        { title: "Rekonsiliasi", url: "/laporan/rekonsiliasi" },
-        { title: "Arus Kas", url: "/laporan/arus-kas" },
-        { title: "Laba Rugi", url: "/laporan/laba-rugi" },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Support",
-      url: "#",
-      icon: <LifeBuoy />,
-    },
-    {
-      title: "Feedback",
-      url: "#",
-      icon: <Send />,
-    },
-  ],
-}
+const baseNavMain = [
+  {
+    title: "Overview",
+    url: "/",
+    icon: <LayoutDashboard />,
+    isActive: true,
+    items: [
+      { title: "Dashboard", url: "/" },
+    ],
+  },
+  {
+    title: "Master Data",
+    url: "#",
+    icon: <Users />,
+    items: [
+      { title: "Nasabah (Daftar)", url: "/nasabah" },
+      { title: "Nasabah Baru", url: "/nasabah/baru" },
+      { title: "Kelompok", url: "/kelompok" },
+      { title: "Kolektor", url: "/kolektor" },
+    ],
+  },
+  {
+    title: "Transaksi",
+    url: "#",
+    icon: <FileText />,
+    items: [
+      { title: "Pengajuan Pinjaman", url: "/pengajuan" },
+      { title: "Pencairan", url: "/pencairan" },
+      { title: "Pembayaran Angsuran", url: "/pembayaran" },
+      { title: "Arus Kas", url: "/kas" },
+    ],
+  },
+  {
+    title: "Akuntansi",
+    url: "#",
+    icon: <Landmark />,
+    items: [
+      { title: "Daftar Akun (COA)", url: "/akuntansi/akun" },
+      { title: "Mapping Kategori", url: "/akuntansi/mapping-kategori" },
+    ],
+  },
+  {
+    title: "Monitoring",
+    url: "#",
+    icon: <AlertTriangle />,
+    items: [
+      { title: "Tunggakan", url: "/monitoring/tunggakan" },
+      { title: "Rekap Kolektor", url: "/monitoring/kolektor" },
+    ],
+  },
+  {
+    title: "Laporan",
+    url: "#",
+    icon: <FileBarChart />,
+    items: [
+      { title: "Transaksi User", url: "/laporan/transaksi-per-user" },
+      { title: "Buku Besar", url: "/laporan/buku-besar" },
+      { title: "Neraca", url: "/laporan/neraca" },
+      { title: "Rekonsiliasi", url: "/laporan/rekonsiliasi" },
+      { title: "Arus Kas", url: "/laporan/arus-kas" },
+      { title: "Laba Rugi", url: "/laporan/laba-rugi" },
+    ],
+  },
+]
+
+const navSecondary = [
+  {
+    title: "Support",
+    url: "#",
+    icon: <LifeBuoy />,
+  },
+  {
+    title: "Feedback",
+    url: "#",
+    icon: <Send />,
+  },
+]
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
@@ -111,9 +111,10 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     tagline?: string
     logoDataUrl?: string
   }
+  accountingMode: AccountingMode
 }
 
-export function AppSidebar({ user, company, ...props }: AppSidebarProps) {
+export function AppSidebar({ user, company, accountingMode, ...props }: AppSidebarProps) {
   return (
     <Sidebar {...props} variant="inset">
       <SidebarHeader>
@@ -143,8 +144,22 @@ export function AppSidebar({ user, company, ...props }: AppSidebarProps) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain
+          items={baseNavMain.map((item) => {
+            if (item.title !== "Akuntansi") return item
+
+            return {
+              ...item,
+              items: item.items.filter((navItem) => {
+                if (navItem.title === "Daftar Akun (COA)") {
+                  return accountingMode === "PROPER"
+                }
+                return true
+              }),
+            }
+          })}
+        />
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

@@ -1,7 +1,10 @@
+import Link from "next/link"
 import { getAccountList } from "@/actions/akuntansi"
+import { getAccountingMode } from "@/actions/settings"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { AccountCreateForm } from "./ui/account-create-form"
 
 function typeBadge(type: string) {
@@ -17,6 +20,35 @@ function typeBadge(type: string) {
 }
 
 export default async function AkunPage() {
+  const accountingMode = await getAccountingMode()
+
+  if (accountingMode === "SIMPLE") {
+    return (
+      <div className="p-6">
+        <Card className="mx-auto max-w-2xl">
+          <CardHeader>
+            <CardTitle className="text-xl">Daftar Akun tersedia di mode Proper</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-muted-foreground">
+            <p>
+              Saat ini aplikasi berjalan dalam mode Simple, sehingga halaman COA disembunyikan untuk
+              menjaga alur pencatatan tetap ringkas.
+            </p>
+            <p>
+              Jika Anda memerlukan pengelolaan akun lengkap, ubah mode akuntansi ke Proper di halaman
+              pengaturan.
+            </p>
+            <div>
+              <Button asChild>
+                <Link href="/settings">Buka Pengaturan Akuntansi</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const accounts = await getAccountList()
 
   return (

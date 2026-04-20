@@ -4,12 +4,15 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { TopBar } from "./_components/top-bar"
-import { getCompanyInfo } from "@/actions/settings"
+import { getCompanyInfo, getAccountingMode } from "@/actions/settings"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
-  const company = await getCompanyInfo()
+  const [company, accountingMode] = await Promise.all([
+    getCompanyInfo(),
+    getAccountingMode(),
+  ])
   const user = {
     name: session.user?.name ?? "User",
     email: session.user?.email ?? "-",
@@ -19,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar user={user} company={company} />
+        <AppSidebar user={user} company={company} accountingMode={accountingMode} />
         <SidebarInset className="bg-background">
           <div className="flex flex-col min-h-screen relative">
             <TopBar />
