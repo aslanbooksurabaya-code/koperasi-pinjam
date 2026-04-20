@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ArrowLeft, Edit, Phone, MapPin, Briefcase, CreditCard } from "lucide-react"
+import { ArrowLeft, Edit, Phone, MapPin, Briefcase, CreditCard, CalendarDays, Store } from "lucide-react"
 import { computeRanking, explainRanking } from "@/lib/ranking"
 
 function docTitle(url: string) {
@@ -52,8 +52,8 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
 
   // Indikator konsistensi dan ranking (mengikuti logika laporan).
   const indikator = (() => {
-    let totalTagihan = 0
-    let totalDibayar = 0
+    let totalTagihanArrears = 0
+    let totalDibayarArrears = 0
     let telat = 0
     let belumJatuhTempo = 0
     let belumBayar = 0
@@ -88,8 +88,11 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         const bayarParsial = pembayaranTagMap.get(jadwal.id) ?? 0
         const bayarEfektif = jadwal.sudahDibayar ? nominalTagihan : Math.min(nominalTagihan, bayarParsial)
 
-        totalTagihan += nominalTagihan
-        totalDibayar += bayarEfektif
+        // Hanya hitung tagihan yang SUDAH JATUH TEMPO (atau sudah dibayar) ke tunggakan
+        if (jadwal.sudahDibayar || jadwal.tanggalJatuhTempo <= now || bayarEfektif > 0) {
+          totalTagihanArrears += nominalTagihan
+          totalDibayarArrears += bayarEfektif
+        }
 
         if (jadwal.sudahDibayar || bayarEfektif >= nominalTagihan) {
           if (jadwal.tanggalBayar && jadwal.tanggalBayar > jadwal.tanggalJatuhTempo) telat += 1
@@ -105,13 +108,11 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
       }
     }
 
-    const kurangAngsuran = Math.max(0, totalTagihan - totalDibayar)
-    const ranking = computeRanking({ telat, kurangAngsuran }, rankingConfig)
+    const tunggakanNominal = Math.max(0, totalTagihanArrears - totalDibayarArrears)
+    const ranking = computeRanking({ telat, tunggakanNominal }, rankingConfig)
 
     return {
-      totalTagihan,
-      totalDibayar,
-      kurangAngsuran,
+      tunggakanNominal,
       telat,
       belumJatuhTempo,
       belumBayar,
@@ -122,7 +123,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
     }
   })()
   const rankingExplain = explainRanking(
-    { telat: indikator.telat, kurangAngsuran: indikator.kurangAngsuran },
+    { telat: indikator.telat, tunggakanNominal: indikator.tunggakanNominal },
     rankingConfig
   )
 
@@ -162,7 +163,9 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
   const infoItems = [
     { icon: Phone, label: "No. HP", value: nasabah.noHp },
     { icon: MapPin, label: "Alamat", value: `${nasabah.alamat}${nasabah.kecamatan ? `, Kec. ${nasabah.kecamatan}` : ""}${nasabah.kotaKab ? `, ${nasabah.kotaKab}` : ""}` },
+    { icon: CalendarDays, label: "Tempat/Tgl. Lahir", value: nasabah.tanggalLahir ? `${nasabah.tempatLahir ?? "—"}, ${new Date(nasabah.tanggalLahir).toLocaleDateString("id-ID")}` : (nasabah.tempatLahir ?? "—") },
     { icon: Briefcase, label: "Pekerjaan", value: nasabah.pekerjaan ?? "—" },
+    { icon: Store, label: "Nama Usaha", value: nasabah.namaUsaha ?? "—" },
     { icon: CreditCard, label: "NIK", value: nasabah.nik },
   ]
 
@@ -185,9 +188,30 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </Button>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <a href="#informasi">Informasi</a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="#penjamin">Penjamin ({nasabah.penjamin.length})</a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="#dokumen">Dokumen ({nasabah.dokumenUrls.length})</a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="#pengajuan">Pengajuan ({nasabah.pengajuan.length})</a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="#transaksi">Transaksi ({transaksiTerjadi.length})</a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="#jadwal">Jadwal ({transaksiAkanDatang.length})</a>
+        </Button>
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Info Utama */}
-        <Card className="lg:col-span-2">
+        <Card id="informasi" className="lg:col-span-2 scroll-mt-24">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Informasi Nasabah</CardTitle>
@@ -197,6 +221,19 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {nasabah.fotoUrl ? (
+              <div className="flex items-center gap-3 rounded-md border bg-muted/20 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={nasabah.fotoUrl}
+                  alt="Foto nasabah"
+                  className="h-14 w-14 rounded-md border bg-white object-cover"
+                />
+                <div className="text-xs text-muted-foreground">
+                  Foto profil nasabah.
+                </div>
+              </div>
+            ) : null}
             {infoItems.map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3">
                 <Icon className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -257,8 +294,8 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
                 <p className="font-semibold">{indikator.belumJatuhTempo.toLocaleString("id-ID")}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Kurang</p>
-                <p className="font-semibold">{fmt(indikator.kurangAngsuran)}</p>
+                <p className="text-xs text-muted-foreground">Tunggakan</p>
+                <p className="font-semibold">{fmt(indikator.tunggakanNominal)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Outstanding</p>
@@ -280,7 +317,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </Card>
 
         {/* Penjamin */}
-        <Card>
+        <Card id="penjamin" className="scroll-mt-24">
           <CardHeader>
             <CardTitle className="text-base">Penjamin</CardTitle>
           </CardHeader>
@@ -299,7 +336,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </Card>
       </div>
 
-      <Card>
+      <Card id="dokumen" className="scroll-mt-24">
         <CardHeader>
           <CardTitle className="text-base">Dokumen Terlampir</CardTitle>
         </CardHeader>
@@ -326,7 +363,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
       </Card>
 
       {/* Riwayat Pengajuan */}
-      <Card>
+      <Card id="pengajuan" className="scroll-mt-24">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Riwayat Pengajuan Pinjaman</CardTitle>
           <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700">
@@ -407,7 +444,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="transaksi" className="scroll-mt-24">
         <CardHeader>
           <CardTitle className="text-base">Log Detail Transaksi Terjadi</CardTitle>
         </CardHeader>
@@ -447,7 +484,7 @@ export default async function NasabahDetailPage({ params }: { params: Promise<{ 
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="jadwal" className="scroll-mt-24">
         <CardHeader>
           <CardTitle className="text-base">Daftar Transaksi Akan Datang</CardTitle>
         </CardHeader>

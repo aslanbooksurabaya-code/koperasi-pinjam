@@ -7,6 +7,7 @@ import { requireRoles } from "@/lib/roles"
 import { AccountType, Prisma, RoleType, RekonsiliasiStatus } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { writeAuditLog } from "@/lib/audit"
+import { serializeData } from "@/lib/utils"
 
 const DEFAULT_ACCOUNTS: Array<{ code: string; name: string; type: AccountType }> = [
   { code: "CASH_TUNAI", name: "Kas Tunai", type: "ASSET" },
@@ -49,10 +50,12 @@ export async function getAccountList() {
 
   await ensureDefaultAccounts()
 
-  return prisma.account.findMany({
+  const result = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: [{ type: "asc" }, { code: "asc" }],
   })
+
+  return serializeData(result)
 }
 
 const accountCreateSchema = z.object({
@@ -168,14 +171,16 @@ function monthRange(params?: { month?: string; year?: string }) {
 }
 
 async function getCashSaldoBookByJenis(kasJenis: "TUNAI" | "BANK", endExclusive: Date) {
-  const rows = await prisma.kasTransaksi.findMany({
-    where: { tanggal: { lt: endExclusive }, kasJenis },
-    select: { jenis: true, jumlah: true },
+  const result = await prisma.kasTransaksi.groupBy({
+    by: ["jenis"],
+    where: { tanggal: { lt: endExclusive }, kasJenis, isApproved: true },
+    _sum: { jumlah: true },
   })
-  return rows.reduce((acc, r) => {
-    const amt = Number(r.jumlah)
-    return acc + (r.jenis === "MASUK" ? amt : -amt)
-  }, 0)
+
+  const masuk = result.find((r) => r.jenis === "MASUK")?._sum.jumlah || 0
+  const keluar = result.find((r) => r.jenis === "KELUAR")?._sum.jumlah || 0
+
+  return Number(masuk) - Number(keluar)
 }
 
 const rekonsiliasiCreateSchema = z.object({
@@ -205,7 +210,7 @@ export async function getRekonsiliasiKasList(params?: { year?: string }) {
     orderBy: { code: "asc" },
   })
 
-  return { rows, cashAccounts }
+  return serializeData({ rows, cashAccounts })
 }
 
 export async function createRekonsiliasiKas(input: unknown) {
@@ -274,7 +279,7 @@ export async function createRekonsiliasiKas(input: unknown) {
     },
   })
 
-  return { success: true, data: row }
+  return serializeData({ success: true, data: row })
 }
 
 export async function setRekonsiliasiStatus(input: { id: string; status: "DRAFT" | "SELESAI" }) {
@@ -334,7 +339,7 @@ export async function getLedgerKasReport(params?: { kasJenis?: string; month?: s
     }
   })
 
-  return { kasJenis, month, year, openingBalance: saldo - data.reduce((a, b) => a + (b.debit - b.kredit), 0), data, closingBalance: saldo }
+  return serializeData({ kasJenis, month, year, openingBalance: saldo - data.reduce((a, b) => a + (b.debit - b.kredit), 0), data, closingBalance: saldo })
 }
 
 export async function getNeracaSederhana(params?: { month?: string; year?: string }) {
@@ -362,7 +367,7 @@ export async function getNeracaSederhana(params?: { month?: string; year?: strin
   const totalSimpanan = Number(simpanan._sum.jumlah ?? 0)
   const ekuitas = totalAset - totalSimpanan
 
-  return {
+  return serializeData({
     month,
     year,
     aset: [
@@ -382,5 +387,5 @@ export async function getNeracaSederhana(params?: { month?: string; year?: strin
       totalKewajiban: totalSimpanan,
       totalEkuitas: ekuitas,
     },
-  }
+  })
 }

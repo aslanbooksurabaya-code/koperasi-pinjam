@@ -8,6 +8,8 @@ import { addMonths, addWeeks } from "date-fns"
 import { ApprovalStatus, Prisma, RoleType } from "@prisma/client"
 import { requireRoles } from "@/lib/roles"
 import { writeApprovalLog, writeAuditLog } from "@/lib/audit"
+import { ensureKasKategori } from "./kas"
+import { serializeData } from "@/lib/utils"
 
 // ========================
 // PENGAJUAN
@@ -47,13 +49,13 @@ export async function getPengajuanList(params: {
     prisma.pengajuan.count({ where }),
   ])
 
-  return { data, total, page, totalPages: Math.ceil(total / limit) }
+  return serializeData({ data, total, page, totalPages: Math.ceil(total / limit) })
 }
 
 export async function getPengajuanById(id: string) {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
-  return prisma.pengajuan.findUnique({
+  const result = await prisma.pengajuan.findUnique({
     where: { id },
     include: {
       nasabah: true,
@@ -63,6 +65,8 @@ export async function getPengajuanById(id: string) {
       pinjaman: { include: { jadwalAngsuran: { take: 5, orderBy: { angsuranKe: "asc" } } } },
     },
   })
+
+  return serializeData(result)
 }
 
 export async function getNasabahPengajuanOptions() {
@@ -139,16 +143,22 @@ export async function approvePengajuan(input: unknown) {
 
   const { pengajuanId, aksi, plafonDisetujui, catatanApproval } = parsed.data
 
-  const updated = await prisma.pengajuan.update({
-    where: { id: pengajuanId },
-    data: {
-      status: aksi === "SETUJU" ? "DISETUJUI" : "DITOLAK",
-      approverId: userId,
-      tanggalApproval: new Date(),
-      plafonDisetujui: plafonDisetujui ? new Prisma.Decimal(plafonDisetujui) : undefined,
-      catatanApproval: catatanApproval,
-    },
-  })
+  let updated;
+  try {
+    updated = await prisma.pengajuan.update({
+      where: { id: pengajuanId },
+      data: {
+        status: aksi === "SETUJU" ? "DISETUJUI" : "DITOLAK",
+        approverId: userId,
+        tanggalApproval: new Date(),
+        plafonDisetujui: plafonDisetujui ? new Prisma.Decimal(plafonDisetujui) : undefined,
+        catatanApproval: catatanApproval,
+      },
+    })
+  } catch (err) {
+    console.error("[approvePengajuan][error]", err)
+    return { error: "Terjadi kesalahan database. Silakan coba login ulang (mungkin sesi kadaluarsa setelah reset database)." }
+  }
 
   revalidatePath("/pengajuan")
   revalidatePath(`/pengajuan/${pengajuanId}`)
@@ -209,6 +219,10 @@ export async function cairkanPinjaman(input: unknown) {
   const tglJatuhTempo = tenorType === "MINGGUAN" ? addWeeks(tglCair, tenor) : addMonths(tglCair, tenor)
   const nomorKontrak = `KNT-${Date.now().toString(36).toUpperCase()}`
 
+  // Pastikan kategori kas tersedia sebelum transaksi
+  const ensured = await ensureKasKategori({ jenis: "KELUAR", kategori: "PENCAIRAN" })
+  if ("error" in ensured) return { error: ensured.error }
+
   // Buat pinjaman + jadwal angsuran dalam 1 transaksi
   const pinjaman = await prisma.$transaction(async (tx) => {
     const pin = await tx.pinjaman.create({
@@ -257,7 +271,7 @@ export async function cairkanPinjaman(input: unknown) {
     await tx.kasTransaksi.create({
       data: {
         jenis: "KELUAR",
-        kategori: "PENCAIRAN",
+        kategori: ensured.key,
         deskripsi: `Pencairan pinjaman ${nomorKontrak}`,
         jumlah: new Prisma.Decimal(nilaiCair),
         kasJenis: "TUNAI",
@@ -284,7 +298,7 @@ export async function cairkanPinjaman(input: unknown) {
 export async function getPengajuanSiapCair() {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
-  return prisma.pengajuan.findMany({
+  const result = await prisma.pengajuan.findMany({
     where: { status: "DISETUJUI" },
     include: {
       nasabah: { select: { namaLengkap: true, nomorAnggota: true } },
@@ -292,4 +306,6 @@ export async function getPengajuanSiapCair() {
     },
     orderBy: { tanggalApproval: "desc" },
   })
+
+  return serializeData(result)
 }

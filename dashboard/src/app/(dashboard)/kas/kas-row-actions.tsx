@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { updateKas, deleteKas } from "@/actions/kas"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ type KasKategori = {
 }
 
 export function KasRowActions({ data, kategoriList }: { data: KasData; kategoriList: KasKategori[] }) {
+  const router = useRouter()
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -71,6 +73,7 @@ export function KasRowActions({ data, kategoriList }: { data: KasData; kategoriL
 
       toast.success("Transaksi kas berhasil diupdate.")
       setIsEditOpen(false)
+      router.refresh()
     })
   }
 
@@ -79,8 +82,12 @@ export function KasRowActions({ data, kategoriList }: { data: KasData; kategoriL
     
     startTransition(async () => {
       const result = await deleteKas(data.id)
-      if (!result.success) toast.error("Gagal menghapus.")
-      else toast.success("Transaksi berhasil dihapus.")
+      if (!result.success) {
+        toast.error("Gagal menghapus.")
+      } else {
+        toast.success("Transaksi berhasil dihapus.")
+        router.refresh()
+      }
     })
   }
 

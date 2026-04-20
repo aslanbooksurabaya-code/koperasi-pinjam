@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { PrintButton } from "@/components/print-button"
 import { ArrowLeft } from "lucide-react"
+import { CompanyDocumentHeader } from "@/components/print/company-document-header"
 
 export const metadata = {
   title: "Kuitansi Pembayaran",
@@ -42,17 +43,10 @@ export default async function KuitansiPage({ params }: { params: Promise<{ id: s
 
       {/* Area Kuitansi */}
       <div id="printable-area" className="border-2 border-slate-800 p-8 rounded-lg relative bg-white">
-        {/* Header Kuitansi */}
-        <div className="flex justify-between items-start border-b-2 border-slate-300 pb-6 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 uppercase">Koperasi Simpan Pinjam</h1>
-            <p className="text-sm text-slate-600 mt-1">Sistem Informasi Manajemen Koperasi</p>
-          </div>
-          <div className="text-right">
-            <h2 className="text-xl font-bold text-slate-900 uppercase tracking-widest">Kuitansi</h2>
-            <p className="text-sm font-mono text-slate-600 mt-1">{pembayaran.nomorTransaksi}</p>
-          </div>
-        </div>
+        <CompanyDocumentHeader
+          documentTitle="Kuitansi"
+          documentNumber={pembayaran.nomorTransaksi}
+        />
 
         {/* Info Utama */}
         <div className="grid grid-cols-2 gap-8 mb-8 text-sm">

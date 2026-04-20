@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft } from "lucide-react"
 import { ApprovalForm } from "./approval-form"
+import { getCompanyInfo } from "@/actions/settings"
+import { formatDateId, normalizeTimeZone } from "@/lib/datetime"
 
 const statusMap: Record<string, { label: string; cls: string }> = {
   DRAFT: { label: "Draft", cls: "bg-gray-100 text-gray-600" },
@@ -29,8 +31,9 @@ function docTitle(url: string) {
 
 export default async function PengajuanDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const pengajuan = await getPengajuanById(id)
+  const [pengajuan, company] = await Promise.all([getPengajuanById(id), getCompanyInfo()])
   if (!pengajuan) notFound()
+  const timeZone = normalizeTimeZone(company.timeZone)
 
   const badge = statusMap[pengajuan.status] ?? { label: pengajuan.status, cls: "" }
   const plafon = Number(pengajuan.plafonDiajukan)
@@ -70,7 +73,7 @@ export default async function PengajuanDetailPage({ params }: { params: Promise<
                     {i + 1}
                   </div>
                   <span className="text-xs text-center">{t.label}</span>
-                  {t.date && <span className="text-xs text-muted-foreground">{new Date(t.date).toLocaleDateString("id-ID")}</span>}
+                  {t.date && <span className="text-xs text-muted-foreground">{formatDateId(t.date, { timeZone })}</span>}
                 </div>
                 {i < timeline.length - 1 && (
                   <div className={`flex-1 h-0.5 mx-2 mb-5 ${t.done ? "bg-emerald-500" : "bg-muted"}`} />
@@ -184,7 +187,7 @@ export default async function PengajuanDetailPage({ params }: { params: Promise<
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tgl. Cair</span>
-                  <span>{new Date(pengajuan.pinjaman.tanggalCair).toLocaleDateString("id-ID")}</span>
+                  <span>{formatDateId(pengajuan.pinjaman.tanggalCair, { timeZone })}</span>
                 </div>
                 <div className="pt-2 mt-2 border-t">
                   <div className="grid gap-2">

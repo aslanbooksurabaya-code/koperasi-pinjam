@@ -14,9 +14,15 @@ export async function writeAuditLog(input: {
   ipAddress?: string
 }) {
   try {
+    let finalActorId = input.actorId
+    if (finalActorId) {
+      const user = await prisma.user.findUnique({ where: { id: finalActorId }, select: { id: true } })
+      if (!user) finalActorId = undefined
+    }
+
     await prisma.auditLog.create({
       data: {
-        actorId: input.actorId,
+        actorId: finalActorId,
         entityType: input.entityType,
         entityId: input.entityId,
         action: input.action,
@@ -41,6 +47,16 @@ export async function writeApprovalLog(input: {
   approvedById?: string
 }) {
   try {
+    // Basic existence checks to avoid foreign key violations
+    const requester = await prisma.user.findUnique({ where: { id: input.requestedById }, select: { id: true } })
+    if (!requester) return // Cannot log without valid requester
+
+    let finalApprovedById = input.approvedById
+    if (finalApprovedById) {
+      const approver = await prisma.user.findUnique({ where: { id: finalApprovedById }, select: { id: true } })
+      if (!approver) finalApprovedById = undefined
+    }
+
     await prisma.approvalLog.create({
       data: {
         entityType: input.entityType,
@@ -48,7 +64,7 @@ export async function writeApprovalLog(input: {
         status: input.status ?? ApprovalStatus.PENDING,
         catatan: input.catatan,
         requestedById: input.requestedById,
-        approvedById: input.approvedById,
+        approvedById: finalApprovedById,
       },
     })
   } catch (error) {

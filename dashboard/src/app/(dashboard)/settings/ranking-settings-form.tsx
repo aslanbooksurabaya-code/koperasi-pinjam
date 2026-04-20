@@ -20,7 +20,7 @@ export function RankingSettingsForm({ initial }: { initial: RankingConfig }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Mengatur batasan ranking A/B/C/D berdasarkan jumlah angsuran telat dan nominal kurang angsuran.
+          Mengatur batasan ranking A/B/C/D berdasarkan jumlah angsuran telat dan nominal tunggakan.
         </p>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -35,13 +35,13 @@ export function RankingSettingsForm({ initial }: { initial: RankingConfig }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="bMaxKurang">B: Maks Kurang (Rp)</Label>
+            <Label htmlFor="bMaxTunggakan">B: Maks Tunggakan (Rp)</Label>
             <Input
-              id="bMaxKurang"
+              id="bMaxTunggakan"
               type="number"
               min={0}
-              value={form.bMaxKurang}
-              onChange={(e) => setForm((s) => ({ ...s, bMaxKurang: Number(e.target.value) }))}
+              value={form.bMaxTunggakan}
+              onChange={(e) => setForm((s) => ({ ...s, bMaxTunggakan: Number(e.target.value) }))}
             />
           </div>
           <div className="space-y-2">
@@ -55,21 +55,21 @@ export function RankingSettingsForm({ initial }: { initial: RankingConfig }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="cMaxKurang">C: Maks Kurang (Rp)</Label>
+            <Label htmlFor="cMaxTunggakan">C: Maks Tunggakan (Rp)</Label>
             <Input
-              id="cMaxKurang"
+              id="cMaxTunggakan"
               type="number"
               min={0}
-              value={form.cMaxKurang}
-              onChange={(e) => setForm((s) => ({ ...s, cMaxKurang: Number(e.target.value) }))}
+              value={form.cMaxTunggakan}
+              onChange={(e) => setForm((s) => ({ ...s, cMaxTunggakan: Number(e.target.value) }))}
             />
           </div>
         </div>
 
         <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-          <div>A: telat = 0 dan kurang = 0</div>
-          <div>B: telat ≤ B.maksTelat dan kurang &lt; B.maksKurang</div>
-          <div>C: telat ≤ C.maksTelat dan kurang &lt; C.maksKurang</div>
+          <div>A: telat = 0 dan tunggakan = 0</div>
+          <div>B: telat ≤ B.maksTelat dan tunggakan &lt; B.maksTunggakan</div>
+          <div>C: telat ≤ C.maksTelat dan tunggakan &lt; C.maksTunggakan</div>
           <div>D: selain itu</div>
         </div>
 
@@ -93,4 +93,3 @@ export function RankingSettingsForm({ initial }: { initial: RankingConfig }) {
     </Card>
   )
 }
-

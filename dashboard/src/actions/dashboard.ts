@@ -3,6 +3,9 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { differenceInDays } from "date-fns"
+import { getCompanyInfo } from "@/actions/settings"
+import { normalizeTimeZone } from "@/lib/datetime"
+import { serializeData } from "@/lib/utils"
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -16,9 +19,14 @@ export async function getDashboardStats() {
   const session = await auth()
   if (!session) throw new Error("Unauthorized")
 
+  const company = await getCompanyInfo()
+  const timeZone = normalizeTimeZone(company.timeZone)
   const today = new Date()
 
-  const [totalNasabah, pinjamanAktif, totalOutstanding, jadwalTelat] = await Promise.all([
+  const startToday = startOfDay(today)
+  const endToday = new Date(startToday.getTime() + 86400000)
+
+  const [totalNasabah, pinjamanAktif, totalOutstanding, jadwalTelat, penagihanHariIni] = await Promise.all([
     prisma.nasabah.count({ where: { status: "AKTIF" } }),
     prisma.pinjaman.count({ where: { status: "AKTIF" } }),
     prisma.pinjaman.aggregate({
@@ -27,73 +35,75 @@ export async function getDashboardStats() {
     }),
     prisma.jadwalAngsuran.findMany({
       where: { sudahDibayar: false, tanggalJatuhTempo: { lt: today } },
-      include: {
+      select: {
+        total: true,
         pinjaman: {
-          include: {
+          select: {
             pengajuan: {
-              include: {
+              select: {
                 kelompok: { select: { nama: true, wilayah: true } },
-                nasabah: { select: { namaLengkap: true } },
               },
             },
           },
         },
       },
+      take: 1000,
+    }),
+    prisma.jadwalAngsuran.count({
+      where: { sudahDibayar: false, tanggalJatuhTempo: { gte: startToday, lt: endToday } },
     }),
   ])
 
-  const totalTunggakan = jadwalTelat.reduce((sum, j) => sum + Number(j.total), 0)
+  const totalTunggakan = jadwalTelat.reduce((sum, j) => sum + Number(j.total ?? 0), 0)
 
-  const startToday = startOfDay(today)
-  const endToday = new Date(startToday.getTime() + 86400000)
-  const penagihanHariIni = await prisma.jadwalAngsuran.count({
-    where: { sudahDibayar: false, tanggalJatuhTempo: { gte: startToday, lt: endToday } },
-  })
-
-  const arusKas6Bulan = []
+  // Arus kas 6 bulan terakhir (Parallel)
+  const bulanQueries = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
     const endD = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
+    bulanQueries.push(
+      prisma.kasTransaksi.groupBy({
+        by: ["jenis"],
+        where: { tanggal: { gte: d, lte: endD }, isApproved: true },
+        _sum: { jumlah: true },
+      }).then(res => ({ date: d, data: res }))
+    )
+  }
 
-    const bulanData = await prisma.kasTransaksi.groupBy({
-      by: ["jenis"],
-      where: { tanggal: { gte: d, lte: endD } },
-      _sum: { jumlah: true },
-    })
-
-    const masuk = bulanData.find((b) => b.jenis === "MASUK")?._sum.jumlah
-    const keluar = bulanData.find((b) => b.jenis === "KELUAR")?._sum.jumlah
-
-    arusKas6Bulan.push({
-      bulan: d.toLocaleDateString("id-ID", { month: "short", year: "2-digit" }),
+  const bulanResults = await Promise.all(bulanQueries)
+  const arusKas6Bulan = bulanResults.map(res => {
+    const masuk = res.data.find((b) => b.jenis === "MASUK")?._sum?.jumlah
+    const keluar = res.data.find((b) => b.jenis === "KELUAR")?._sum?.jumlah
+    return {
+      bulan: new Intl.DateTimeFormat("id-ID", { timeZone, month: "short", year: "2-digit" }).format(res.date),
       masuk: Number(masuk ?? 0),
       keluar: Number(keluar ?? 0),
-    })
-  }
+    }
+  })
 
   const tunggakanPerKelompok: Record<string, { nama: string; wilayah: string; total: number; count: number }> = {}
   for (const j of jadwalTelat) {
-    const k = j.pinjaman.pengajuan.kelompok
+    const k = j.pinjaman?.pengajuan?.kelompok
     if (!k) continue
     if (!tunggakanPerKelompok[k.nama]) {
       tunggakanPerKelompok[k.nama] = { nama: k.nama, wilayah: k.wilayah ?? "", total: 0, count: 0 }
     }
-    tunggakanPerKelompok[k.nama].total += Number(j.total)
+    tunggakanPerKelompok[k.nama].total += Number(j.total ?? 0)
     tunggakanPerKelompok[k.nama].count += 1
   }
   const topTunggakan = Object.values(tunggakanPerKelompok)
     .sort((a, b) => b.total - a.total)
     .slice(0, 5)
 
-  return {
+  return serializeData({
     totalNasabah,
     pinjamanAktif,
-    totalOutstanding: Number(totalOutstanding._sum.sisaPinjaman ?? 0),
+    totalOutstanding: Number(totalOutstanding?._sum?.sisaPinjaman ?? 0),
     totalTunggakan,
     penagihanHariIni,
     arusKas6Bulan,
     topTunggakan,
-  }
+  })
 }
 
 type TunggakanFilter = {
@@ -231,7 +241,7 @@ export async function getTunggakanList(params?: TunggakanFilter) {
   const outstanding = Number(outstandingTotal._sum.sisaPinjaman ?? 0)
   const nplRatio = outstanding > 0 ? (nplOutstanding / outstanding) * 100 : 0
 
-  return {
+  return serializeData({
     data,
     summary: {
       totalKasus: data.length,
@@ -241,7 +251,7 @@ export async function getTunggakanList(params?: TunggakanFilter) {
       nplRatio,
       buckets,
     },
-  }
+  })
 }
 
 type KelompokOverview = {
@@ -346,10 +356,10 @@ export async function getKelompokOverview(search?: string): Promise<{
   const totalPinjamanAktif = data.reduce((sum, item) => sum + item.pinjamanAktif, 0)
   const avgAnggotaPerKelompok = totalKelompok > 0 ? Math.round(totalAnggota / totalKelompok) : 0
 
-  return {
+  return serializeData({
     data,
     summary: { totalKelompok, totalAnggota, totalPinjamanAktif, avgAnggotaPerKelompok },
-  }
+  })
 }
 
 type KolektorOverview = {
@@ -478,7 +488,7 @@ export async function getKolektorOverview(params?: KolektorFilter): Promise<Kole
     orderBy: { name: "asc" },
   })
 
-  return kolektorList.map((k) => {
+  return serializeData(kolektorList.map((k) => {
     const kelompokSet = new Set(k.nasabahSebagaiKolektor.map((n) => n.kelompokId).filter(Boolean))
     let realisasi = 0
     let tunggakan = 0
@@ -514,5 +524,5 @@ export async function getKolektorOverview(params?: KolektorFilter): Promise<Kole
       setoran,
       pencapaian,
     }
-  })
+  }))
 }

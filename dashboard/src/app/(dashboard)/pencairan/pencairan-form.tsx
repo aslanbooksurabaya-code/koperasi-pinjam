@@ -26,11 +26,20 @@ function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
 }
 
+function getLocalDateInputValue(date: Date) {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
 export function PencairanForm({ pengajuan }: Props) {
   const [isPending, startTransition] = useTransition()
   const [potonganAdmin, setPotonganAdmin] = useState(0)
   const [potonganProvisi, setPotonganProvisi] = useState(0)
-  const [tanggalCair, setTanggalCair] = useState(new Date().toISOString().split("T")[0])
+  const [tanggalCair, setTanggalCair] = useState(() =>
+    getLocalDateInputValue(new Date()),
+  )
   const router = useRouter()
 
   const plafon = Number(pengajuan.plafonDisetujui ?? pengajuan.plafonDiajukan)
@@ -115,7 +124,13 @@ export function PencairanForm({ pengajuan }: Props) {
 
           <div className="space-y-2">
             <Label>Tanggal Pencairan</Label>
-            <Input type="date" value={tanggalCair} onChange={(e) => setTanggalCair(e.target.value)} required />
+            <Input
+              type="date"
+              value={tanggalCair}
+              onChange={(e) => setTanggalCair(e.target.value)}
+              required
+              suppressHydrationWarning
+            />
           </div>
 
           <div className="rounded-lg bg-teal-50 border border-teal-200 p-4 text-sm">

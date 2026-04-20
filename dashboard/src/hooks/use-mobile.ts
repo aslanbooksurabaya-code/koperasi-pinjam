@@ -3,15 +3,17 @@ import * as React from "react"
 const MOBILE_BREAKPOINT = 768
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false
-    return window.innerWidth < MOBILE_BREAKPOINT
-  })
+  // IMPORTANT:
+  // - Keep the initial render consistent between server and client to avoid hydration mismatch.
+  // - We intentionally default to `false` and update after mount.
+  const [isMobile, setIsMobile] = React.useState<boolean>(false)
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+    const setFromWindow = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    setFromWindow()
     const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+      setFromWindow()
     }
     mql.addEventListener("change", onChange)
     return () => mql.removeEventListener("change", onChange)

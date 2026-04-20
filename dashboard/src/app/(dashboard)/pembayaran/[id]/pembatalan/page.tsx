@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ApprovalActionButtons, RequestPembatalanForm } from "./pembatalan-actions"
+import { getCompanyInfo } from "@/actions/settings"
+import { formatDateTimeId, normalizeTimeZone } from "@/lib/datetime"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n)
@@ -22,9 +24,10 @@ function statusBadge(status: string) {
 
 export default async function PembatalanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [session, pembayaran] = await Promise.all([auth(), getPembayaranById(id)])
+  const [session, pembayaran, company] = await Promise.all([auth(), getPembayaranById(id), getCompanyInfo()])
   if (!session) notFound()
   if (!pembayaran) notFound()
+  const timeZone = normalizeTimeZone(company.timeZone)
 
   const approvalList = await getPembatalanApprovalList(id)
   const hasPending = approvalList.some((item) => item.status === "PENDING")
@@ -61,7 +64,7 @@ export default async function PembatalanPage({ params }: { params: Promise<{ id:
           </div>
           <div>
             <p className="text-muted-foreground">Tanggal Bayar</p>
-            <p>{new Date(pembayaran.tanggalBayar).toLocaleString("id-ID")}</p>
+            <p>{formatDateTimeId(pembayaran.tanggalBayar, { timeZone })}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Input Oleh</p>
@@ -108,7 +111,7 @@ export default async function PembatalanPage({ params }: { params: Promise<{ id:
               ) : (
                 approvalList.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="text-sm">{new Date(item.createdAt).toLocaleString("id-ID")}</TableCell>
+                    <TableCell className="text-sm">{formatDateTimeId(item.createdAt, { timeZone })}</TableCell>
                     <TableCell>{item.requestedBy.name}</TableCell>
                     <TableCell>{statusBadge(item.status)}</TableCell>
                     <TableCell className="max-w-sm whitespace-pre-wrap text-sm">{item.catatan ?? "-"}</TableCell>

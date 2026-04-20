@@ -9,7 +9,7 @@ import { pengajuanSchema, type PengajuanInput } from "@/lib/validations/pengajua
 import { createPengajuan, getNasabahPengajuanOptions } from "@/actions/pengajuan"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Field, FieldLabel, FieldDescription, FieldError } from "@/components/ui/field"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -207,8 +207,8 @@ export default function PengajuanBaruPage() {
               <CardTitle className="text-base">Data Pengajuan</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nasabah <span className="text-red-500">*</span></Label>
+              <Field>
+                <FieldLabel>Nasabah <span className="text-red-500">*</span></FieldLabel>
                 <Select value={nasabahId || "__NONE__"} onValueChange={(v) => handleNasabahSelect(v === "__NONE__" ? "" : v)}>
                   <SelectTrigger><SelectValue placeholder="Pilih nasabah..." /></SelectTrigger>
                   <SelectContent>
@@ -220,8 +220,8 @@ export default function PengajuanBaruPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.nasabahId && <p className="text-xs text-red-500">{errors.nasabahId.message}</p>}
-              </div>
+                {errors.nasabahId && <FieldError>{errors.nasabahId.message}</FieldError>}
+              </Field>
 
               <div className="grid sm:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-md border p-3">
@@ -239,8 +239,8 @@ export default function PengajuanBaruPage() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Jenis Pinjaman</Label>
+                <Field>
+                  <FieldLabel>Jenis Pinjaman</FieldLabel>
                   <Select defaultValue="REGULAR" onValueChange={(v) => setValue("jenisPinjaman", v as PengajuanInput["jenisPinjaman"])}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -249,9 +249,9 @@ export default function PengajuanBaruPage() {
                       <SelectItem value="USAHA">Usaha</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipe Tenor</Label>
+                </Field>
+                <Field>
+                  <FieldLabel>Tipe Tenor</FieldLabel>
                   <Select
                     defaultValue="BULANAN"
                     onValueChange={(v) => {
@@ -266,11 +266,11 @@ export default function PengajuanBaruPage() {
                       <SelectItem value="MINGGUAN">Mingguan</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </Field>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="tenor">Tenor ({tipeTenor === "MINGGUAN" ? "minggu" : "bulan"}) <span className="text-red-500">*</span></Label>
+              <Field>
+                <FieldLabel htmlFor="tenor">Tenor ({tipeTenor === "MINGGUAN" ? "minggu" : "bulan"}) <span className="text-red-500">*</span></FieldLabel>
                 <Controller
                   control={control}
                   name="tenor"
@@ -288,12 +288,12 @@ export default function PengajuanBaruPage() {
                     />
                   )}
                 />
-                {errors.tenor && <p className="text-xs text-red-500">{errors.tenor.message}</p>}
-              </div>
+                {errors.tenor && <FieldError>{errors.tenor.message}</FieldError>}
+              </Field>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="plafonDiajukan">Plafon Diajukan (Rp) <span className="text-red-500">*</span></Label>
+                <Field>
+                  <FieldLabel htmlFor="plafonDiajukan">Plafon Diajukan (Rp) <span className="text-red-500">*</span></FieldLabel>
                   <Controller
                     control={control}
                     name="plafonDiajukan"
@@ -311,10 +311,10 @@ export default function PengajuanBaruPage() {
                       />
                     )}
                   />
-                  {errors.plafonDiajukan && <p className="text-xs text-red-500">{errors.plafonDiajukan.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bungaPerBulan">Bunga Flat/{tipeTenor === "MINGGUAN" ? "minggu" : "bulan"} (%) <span className="text-red-500">*</span></Label>
+                  {errors.plafonDiajukan && <FieldError>{errors.plafonDiajukan.message}</FieldError>}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="bungaPerBulan">Bunga Flat/{tipeTenor === "MINGGUAN" ? "minggu" : "bulan"} (%) <span className="text-red-500">*</span></FieldLabel>
                   <Controller
                     control={control}
                     name="bungaPerBulan"
@@ -332,35 +332,35 @@ export default function PengajuanBaruPage() {
                       />
                     )}
                   />
-                  {errors.bungaPerBulan && <p className="text-xs text-red-500">{errors.bungaPerBulan.message}</p>}
-                </div>
+                  {errors.bungaPerBulan && <FieldError>{errors.bungaPerBulan.message}</FieldError>}
+                </Field>
               </div>
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label htmlFor="tujuanPinjaman">Tujuan Pinjaman <span className="text-red-500">*</span></Label>
+              <Field>
+                <FieldLabel htmlFor="tujuanPinjaman">Tujuan Pinjaman <span className="text-red-500">*</span></FieldLabel>
                 <Textarea id="tujuanPinjaman" {...register("tujuanPinjaman")} rows={2} placeholder="Modal usaha, keperluan pendidikan, dll..." />
-                {errors.tujuanPinjaman && <p className="text-xs text-red-500">{errors.tujuanPinjaman.message}</p>}
-              </div>
+                {errors.tujuanPinjaman && <FieldError>{errors.tujuanPinjaman.message}</FieldError>}
+              </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="agunan">Agunan / Jaminan</Label>
+              <Field>
+                <FieldLabel htmlFor="agunan">Agunan / Jaminan</FieldLabel>
                 <Input id="agunan" {...register("agunan")} placeholder="BPKB Motor, sertifikat tanah, dll..." />
-              </div>
+              </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="catatanPengajuan">Catatan</Label>
+              <Field>
+                <FieldLabel htmlFor="catatanPengajuan">Catatan</FieldLabel>
                 <Textarea
                   id="catatanPengajuan"
                   {...register("catatanPengajuan")}
                   rows={2}
                   placeholder="Catatan tambahan untuk koperasi (opsional)..."
                 />
-              </div>
+              </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="dokumenPendukungUrls">Dokumen Pendukung</Label>
+              <Field>
+                <FieldLabel htmlFor="dokumenPendukungUrls">Dokumen Pendukung</FieldLabel>
                 <Input
                   id="dokumenPendukungUrls"
                   type="file"
@@ -372,9 +372,9 @@ export default function PengajuanBaruPage() {
                   }}
                   disabled={isUploadingDokumen}
                 />
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <FieldDescription className="flex items-center gap-1">
                   <Upload className="size-3" /> {isUploadingDokumen ? "Sedang upload..." : "Upload dokumen (jpg/png/webp/pdf, max 5MB per file)."}
-                </p>
+                </FieldDescription>
                 {uploadedDokumen.length > 0 && (
                   <div className="space-y-1">
                     {uploadedDokumen.map((url) => (
@@ -398,8 +398,8 @@ export default function PengajuanBaruPage() {
                     ))}
                   </div>
                 )}
-                {errors.dokumenPendukungUrls && <p className="text-xs text-red-500">Dokumen pendukung tidak valid.</p>}
-              </div>
+                {errors.dokumenPendukungUrls && <FieldError>Dokumen pendukung tidak valid.</FieldError>}
+              </Field>
             </CardContent>
           </Card>
         </div>

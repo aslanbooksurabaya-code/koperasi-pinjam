@@ -375,6 +375,8 @@ model KasKategori {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  kasTransaksi KasTransaksi[]
+
   @@map("kas_kategori")
 }
 
@@ -382,7 +384,8 @@ model KasTransaksi {
   id          String   @id @default(cuid())
   tanggal     DateTime @default(now())
   jenis       JenisKas
-  kategori    String   // "PENCAIRAN", "ANGSURAN", "OPERASIONAL", "GAJI", dll
+  kategori    String   // FK to KasKategori.key
+  kat         KasKategori @relation(fields: [kategori], references: [key])
   deskripsi   String
   jumlah      Decimal  @db.Decimal(15, 2)
   kasJenis    String   @default("TUNAI") // "TUNAI" | "BANK"

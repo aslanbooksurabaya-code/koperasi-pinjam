@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const demoText = "admin@koperasi.id / admin123"
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -145,7 +146,7 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Demo:</span>{" "}
-            admin@koperasi.id / admin123
+            {demoText}
           </p>
         </div>
       </div>

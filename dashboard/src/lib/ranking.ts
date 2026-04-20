@@ -2,48 +2,48 @@ export type RankingGrade = "A" | "B" | "C" | "D"
 
 export type RankingConfig = {
   bMaxTelat: number
-  bMaxKurang: number
+  bMaxTunggakan: number
   cMaxTelat: number
-  cMaxKurang: number
+  cMaxTunggakan: number
 }
 
 export const DEFAULT_RANKING_CONFIG: RankingConfig = {
   bMaxTelat: 1,
-  bMaxKurang: 1_000_000,
+  bMaxTunggakan: 1_000_000,
   cMaxTelat: 3,
-  cMaxKurang: 3_000_000,
+  cMaxTunggakan: 3_000_000,
 }
 
-export function computeRanking(input: { telat: number; kurangAngsuran: number }, cfg?: Partial<RankingConfig>): RankingGrade {
+export function computeRanking(input: { telat: number; tunggakanNominal: number }, cfg?: Partial<RankingConfig>): RankingGrade {
   const config: RankingConfig = { ...DEFAULT_RANKING_CONFIG, ...(cfg ?? {}) }
   const telat = Math.max(0, Math.trunc(input.telat))
-  const kurang = Math.max(0, Number(input.kurangAngsuran) || 0)
+  const tunggakan = Math.max(0, Number(input.tunggakanNominal) || 0)
 
-  if (telat === 0 && kurang <= 0) return "A"
-  if (telat <= config.bMaxTelat && kurang < config.bMaxKurang) return "B"
-  if (telat <= config.cMaxTelat && kurang < config.cMaxKurang) return "C"
+  if (telat === 0 && tunggakan <= 0) return "A"
+  if (telat <= config.bMaxTelat && tunggakan < config.bMaxTunggakan) return "B"
+  if (telat <= config.cMaxTelat && tunggakan < config.cMaxTunggakan) return "C"
   return "D"
 }
 
-export function explainRanking(input: { telat: number; kurangAngsuran: number }, cfg?: Partial<RankingConfig>) {
+export function explainRanking(input: { telat: number; tunggakanNominal: number }, cfg?: Partial<RankingConfig>) {
   const config: RankingConfig = { ...DEFAULT_RANKING_CONFIG, ...(cfg ?? {}) }
   const telat = Math.max(0, Math.trunc(input.telat))
-  const kurang = Math.max(0, Number(input.kurangAngsuran) || 0)
-  const grade = computeRanking({ telat, kurangAngsuran: kurang }, config)
+  const tunggakan = Math.max(0, Number(input.tunggakanNominal) || 0)
+  const grade = computeRanking({ telat, tunggakanNominal: tunggakan }, config)
 
   const rules = [
-    `A: telat = 0 dan kurang = 0`,
-    `B: telat <= ${config.bMaxTelat} dan kurang < Rp ${config.bMaxKurang.toLocaleString("id-ID")}`,
-    `C: telat <= ${config.cMaxTelat} dan kurang < Rp ${config.cMaxKurang.toLocaleString("id-ID")}`,
+    `A: telat = 0 dan tunggakan = 0`,
+    `B: telat <= ${config.bMaxTelat} dan tunggakan < Rp ${config.bMaxTunggakan.toLocaleString("id-ID")}`,
+    `C: telat <= ${config.cMaxTelat} dan tunggakan < Rp ${config.cMaxTunggakan.toLocaleString("id-ID")}`,
     `D: selain itu`,
   ]
 
   return {
     grade,
     telat,
-    kurangAngsuran: kurang,
+    tunggakanNominal: tunggakan,
     config,
     rules,
-    summary: `Kondisi: telat ${telat}, kurang Rp ${kurang.toLocaleString("id-ID")} -> ranking ${grade}`,
+    summary: `Kondisi: telat ${telat}, tunggakan Rp ${tunggakan.toLocaleString("id-ID")} -> ranking ${grade}`,
   }
 }

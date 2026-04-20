@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { PrintButton } from "@/components/print-button"
+import { CompanyDocumentHeader } from "@/components/print/company-document-header"
 
 export const metadata = {
   title: "Kartu Angsuran",
@@ -56,11 +57,16 @@ export default async function KartuAngsuranPage({ params }: { params: Promise<{ 
       <div id="printable-area" className="border-2 border-slate-800 p-6 sm:p-8 rounded-xl relative bg-white mx-auto print:border-0 print:p-0">
         
         {/* Kop Koperasi */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-black uppercase tracking-wide">Koperasi Simpan Pinjam</h1>
-          <p className="text-sm font-medium tracking-widest bg-slate-900 text-white inline-block px-4 py-1 mt-1 rounded-full">
-            KARTU ANGSURAN PINJAMAN
-          </p>
+        <div className="mb-6">
+          <CompanyDocumentHeader
+            documentTitle="Kartu Angsuran"
+            documentNumber={pinjaman.nomorKontrak}
+          />
+          <div className="text-center -mt-2">
+            <p className="text-sm font-medium tracking-widest bg-slate-900 text-white inline-block px-4 py-1 mt-1 rounded-full">
+              KARTU ANGSURAN PINJAMAN
+            </p>
+          </div>
         </div>
 
         {/* Informasi Debitur */}

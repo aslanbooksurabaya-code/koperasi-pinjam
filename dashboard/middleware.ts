@@ -18,7 +18,8 @@ export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Redirect ke login jika belum terautentikasi (kecuali public paths)
-  const isPublicPath = pathname.startsWith("/api") || pathname === "/" || pathname === "/login"
+  // "/" as root dashboard is NOT public anymore.
+  const isPublicPath = pathname.startsWith("/api") || pathname === "/login"
   if (isPublicPath) {
     return NextResponse.next()
   }

@@ -1,29 +1,35 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/layout/app-sidebar"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { TopBar } from "./_components/top-bar"
+import { getCompanyInfo } from "@/actions/settings"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
+  const company = await getCompanyInfo()
+  const user = {
+    name: session.user?.name ?? "User",
+    email: session.user?.email ?? "-",
+    avatar: undefined as string | undefined,
+  }
 
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full">
-          <AppSidebar />
-          <main className="flex-1 flex flex-col min-w-0 bg-gradient-to-br from-background via-[#f4f8ff] to-[#eef4ff]">
-            {/* Mobile sidebar trigger */}
-            <header className="flex h-14 items-center gap-4 border-b/40 bg-background/90 backdrop-blur px-4 md:px-6 lg:hidden">
-              <SidebarTrigger />
-              <span className="font-semibold">KoperasiApp</span>
-            </header>
-            <div className="flex-1 overflow-auto">
-              {children}
+        <AppSidebar user={user} company={company} />
+        <SidebarInset className="bg-background">
+          <div className="flex flex-col min-h-screen relative">
+            <TopBar />
+            <div className="flex-1 overflow-auto bg-gradient-to-br from-background via-slate-50/50 to-slate-100/50 dark:via-slate-950 dark:to-slate-900 p-4 md:p-6 lg:p-8">
+              <div className="mx-auto max-w-7xl">
+                {children}
+              </div>
             </div>
-          </main>
-        </div>
+          </div>
+        </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
   )
