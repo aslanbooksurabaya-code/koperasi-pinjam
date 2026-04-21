@@ -107,7 +107,7 @@ export default async function TransaksiPerUserPage({
              <CardTitle className="text-base font-semibold">Filter Laporan</CardTitle>
           </div>
           <form className="grid grid-cols-1 md:grid-cols-4 gap-4" action="/laporan/transaksi-per-user">
-            <Input name="search" defaultValue={search} placeholder="Nama, anggota, atau NIK..." className="bg-slate-50 border-slate-100 focus-visible:bg-white dark:bg-slate-900 dark:border-slate-800" />
+            <Input name="search" defaultValue={search} placeholder="Nama, anggota, atau NIK..." />
             <select name="kelompokId" defaultValue={kelompokId} className="h-9 rounded-lg border border-slate-100 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all dark:border-slate-800 dark:bg-slate-900">
               <option value="">Semua kelompok</option>
               {report.kelompokOptions.map((k) => (

@@ -61,8 +61,8 @@ export default async function TunggakanPage({
              <CardTitle className="text-base font-semibold">Filter Monitoring</CardTitle>
           </div>
           <form className="grid grid-cols-1 md:grid-cols-6 gap-3" action="/monitoring/tunggakan">
-            <Input type="date" name="tanggalDari" defaultValue={params.tanggalDari} className="bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" />
-            <Input type="date" name="tanggalSampai" defaultValue={params.tanggalSampai} className="bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" />
+            <Input type="date" name="tanggalDari" defaultValue={params.tanggalDari} />
+            <Input type="date" name="tanggalSampai" defaultValue={params.tanggalSampai} />
             <select name="kolektorId" defaultValue={params.kolektorId ?? ""} className="h-9 rounded-lg border border-slate-100 bg-slate-50 px-3 text-sm focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all dark:border-slate-800 dark:bg-slate-900">
               <option value="">Semua kolektor</option>
               {filterOptions.kolektor.map((k) => (

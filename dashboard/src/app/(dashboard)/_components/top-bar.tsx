@@ -85,11 +85,7 @@ export function TopBar() {
         {/* Search Input */}
         <div className="relative hidden lg:flex items-center flex-1 max-w-sm group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input
-            type="search"
-            placeholder="Cari nasabah atau transaksi..."
-            className="pl-9 h-9 w-full bg-slate-50 border-slate-100 focus-visible:bg-white focus-visible:border-slate-200 transition-all dark:bg-slate-900 dark:border-slate-800 dark:focus-visible:bg-slate-950"
-          />
+          <Input type="search" placeholder="Cari nasabah atau transaksi..." className="pl-9 h-9 w-full focus-visible:border-slate-200 transition-all dark:focus-visible:bg-slate-950" />
         </div>
 
         {/* Date Header */}

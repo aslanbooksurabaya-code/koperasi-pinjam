@@ -75,12 +75,7 @@ export default async function NasabahPage({
           <form method="GET" className="flex flex-col lg:flex-row gap-3">
             <div className="relative flex-1 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <Input
-                name="search"
-                defaultValue={search}
-                placeholder="Cari nama, NIK, atau nomor anggota..."
-                className="pl-9 bg-slate-50 border-slate-100 focus-visible:bg-white transition-all dark:bg-slate-900 dark:border-slate-800"
-              />
+              <Input name="search" defaultValue={search} placeholder="Cari nama, NIK, atau nomor anggota..." className="pl-9 transition-all" />
             </div>
             <select
               name="kelompokId"

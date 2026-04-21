@@ -80,15 +80,15 @@ export function KolektorManagement({ initialKolektor, sumberOptions, roleTable }
           <CardContent className="space-y-4 pt-6">
             <div className="space-y-2">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nama Lengkap</Label>
-              <Input value={manualName} onChange={(e) => setManualName(e.target.value)} className="bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" />
+              <Input value={manualName} onChange={(e) => setManualName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Email</Label>
-              <Input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} className="bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" />
+              <Input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Password Sementara</Label>
-              <Input value={manualPassword} onChange={(e) => setManualPassword(e.target.value)} className="bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" />
+              <Input value={manualPassword} onChange={(e) => setManualPassword(e.target.value)} />
             </div>
             <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800">
                <label className="flex items-center gap-3 text-xs font-semibold cursor-pointer">

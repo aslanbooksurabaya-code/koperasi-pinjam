@@ -61,12 +61,7 @@ export default async function KelompokPage({
           </div>
           <form className="relative max-w-md group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input 
-              name="search" 
-              defaultValue={search} 
-              placeholder="Cari nama/kode/wilayah kelompok..." 
-              className="pl-9 bg-slate-50 border-slate-100 focus-visible:bg-white transition-all dark:bg-slate-900 dark:border-slate-800" 
-            />
+            <Input name="search" defaultValue={search} placeholder="Cari nama/kode/wilayah kelompok..." className="pl-9 transition-all" />
           </form>
         </CardHeader>
         <CardContent className="p-0">

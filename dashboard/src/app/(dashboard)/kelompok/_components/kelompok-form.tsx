@@ -124,8 +124,8 @@ export function KelompokForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="grid lg:grid-cols-5 gap-8">
-      <div className="lg:col-span-3 space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      <div className="space-y-6">
         <Card className="border-none shadow-sm overflow-hidden">
           <CardHeader className="pb-6 border-b border-slate-50 dark:border-slate-800/50">
             <div className="flex items-center gap-2 mb-1">
@@ -138,12 +138,12 @@ export function KelompokForm({
             <div className="grid sm:grid-cols-2 gap-6">
               <Field>
                 <FieldLabel htmlFor="kode" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kode Kelompok</FieldLabel>
-                <Input id="kode" {...register("kode")} className="h-10 bg-slate-50 border-slate-100 font-mono text-sm dark:bg-slate-900 dark:border-slate-800" placeholder="KLP-001" />
+                <Input id="kode" {...register("kode")} className="h-10 font-mono text-sm" placeholder="KLP-001" />
                 {errors.kode && <FieldError className="text-[10px] font-bold text-red-500 uppercase">{errors.kode.message}</FieldError>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="nama" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nama Kelompok</FieldLabel>
-                <Input id="nama" {...register("nama")} className="h-10 bg-slate-50 border-slate-100 font-bold dark:bg-slate-900 dark:border-slate-800" placeholder="Nama Kelompok..." />
+                <Input id="nama" {...register("nama")} className="h-10 font-bold" placeholder="Nama Kelompok..." />
                 {errors.nama && <FieldError className="text-[10px] font-bold text-red-500 uppercase">{errors.nama.message}</FieldError>}
               </Field>
             </div>
@@ -153,14 +153,14 @@ export function KelompokForm({
                 <FieldLabel htmlFor="wilayah" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Wilayah / Area</FieldLabel>
                 <div className="relative group w-full">
                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 group-focus-within:text-primary transition-colors" />
-                   <Input id="wilayah" {...register("wilayah")} className="pl-9 h-10 w-full bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" placeholder="Contoh: Desa Sukamaju" />
+                   <Input id="wilayah" {...register("wilayah")} className="pl-9 h-10 w-full" placeholder="Contoh: Desa Sukamaju" />
                 </div>
               </Field>
               <Field>
                 <FieldLabel htmlFor="jadwalPertemuan" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jadwal Pertemuan</FieldLabel>
                 <div className="relative group w-full">
                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 group-focus-within:text-primary transition-colors" />
-                   <Input id="jadwalPertemuan" {...register("jadwalPertemuan")} className="pl-9 h-10 w-full bg-slate-50 border-slate-100 dark:bg-slate-900 dark:border-slate-800" placeholder="Senin, 09:00 WIB" />
+                   <Input id="jadwalPertemuan" {...register("jadwalPertemuan")} className="pl-9 h-10 w-full" placeholder="Senin, 09:00 WIB" />
                 </div>
               </Field>
             </div>
@@ -190,7 +190,7 @@ export function KelompokForm({
                         ))}
                     </SelectContent>
                   </Select>
-                  <Input {...register("ketua")} placeholder="Input manual..." className="h-10 sm:w-48 bg-slate-50/20" />
+                  <Input {...register("ketua")} placeholder="Input manual..." className="h-10 sm:w-48" />
                </div>
                <FieldDescription className="text-[10px] text-muted-foreground flex items-center gap-1.5 bg-slate-50 p-2 rounded-lg dark:bg-slate-900/30">
                  <Info className="size-3 text-blue-500" />
@@ -201,7 +201,7 @@ export function KelompokForm({
         </Card>
       </div>
 
-      <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6">
         <Card className="border-none shadow-sm overflow-hidden flex flex-col h-fit">
           <CardHeader className="pb-4 border-b border-slate-50 dark:border-slate-800/50">
             <div className="flex items-center justify-between">

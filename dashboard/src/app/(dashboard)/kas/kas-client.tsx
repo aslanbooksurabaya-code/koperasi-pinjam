@@ -471,7 +471,7 @@ export function KasClientPage({ initialData, initialKategori }: { initialData: K
                <CardDescription>Catat pengeluaran atau pemasukan kas secara manual</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-              <div className="grid sm:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Jenis Transaksi</Label>
                   <Select onValueChange={(v) => {
@@ -520,7 +520,7 @@ export function KasClientPage({ initialData, initialKategori }: { initialData: K
                   </div>
                 </div>
               </div>
-              <div className="grid sm:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Jumlah (Rp)</Label>
                   <NumericFormat
@@ -597,7 +597,7 @@ export function KasClientPage({ initialData, initialKategori }: { initialData: K
                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-              <div className="grid sm:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Jenis Kategori</Label>
                   <Select

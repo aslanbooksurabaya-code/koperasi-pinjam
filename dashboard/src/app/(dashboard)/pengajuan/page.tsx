@@ -73,12 +73,7 @@ export default async function PengajuanListPage({
             <input type="hidden" name="status" value={status} />
             <div className="relative flex-1 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <Input 
-                name="search" 
-                defaultValue={search} 
-                placeholder="Cari nama nasabah..." 
-                className="pl-9 bg-slate-50 border-slate-100 focus-visible:bg-white transition-all dark:bg-slate-900 dark:border-slate-800" 
-              />
+              <Input name="search" defaultValue={search} placeholder="Cari nama nasabah..." className="pl-9 transition-all" />
             </div>
             <Button type="submit" variant="secondary" className="px-6">Cari</Button>
           </form>
